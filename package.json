@@ -1,11 +1,15 @@
 {
   "name": "postpromoter",
   "version": "1.0.0",
-  "description": "Post Promotion Steem Bot",
+  "description": "Steem bid-based voting bot written in JavaScript",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MattyIce/postpromoter.git"
+  },
   "author": "yabapmatt",
-  "license": "ISC"
+  "license": "MIT"
 }
