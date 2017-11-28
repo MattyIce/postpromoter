@@ -1,6 +1,4 @@
-var readline = require('readline');
 var fs = require("fs");
-const app = require("express")();
 const steem = require('steem');
 var utils = require('./utils');
 
@@ -8,17 +6,15 @@ var account = null;
 var last_trans = 0;
 var outstanding_bids = [];
 var config = null;
-
-app.get('/', (req, res) => res.send(JSON.stringify(account)));
-app.listen(3000, () => console.log('Example app listening on port 3000!'));
+var posting_key = process.argv[2];
 
 steem.api.setOptions({ url: 'https://api.steemit.com' });
 
 console.log("\n *START* \n");
 
-process();
+startProcess();
 
-function process() {
+function startProcess() {
   //console.log("Begin Processing...");
 
   // Load the settings from the config file each time so we can pick up any changes
@@ -28,12 +24,15 @@ function process() {
     account = result[0];
   });
 
-  //console.log("Voting Power: " + utils.getVotingPower(account));
-
   if(account) {
     getTransactions();
 
+    // Load and log the current voting power of the account
     var vp = utils.getVotingPower(account);
+    process.stdout.clearLine();
+    process.stdout.cursorTo(0);
+    process.stdout.write("Voting Power: " + vp);
+
 
     // We are at 100% voting power - time to vote!
     if(vp >= 10000 && outstanding_bids.length > 0) {
@@ -46,7 +45,7 @@ function process() {
   }
 
   //console.log("End Processing...");
-  setTimeout(process, 5000);
+  setTimeout(startProcess, 5000);
 }
 
 function startVoting(bids) {
@@ -66,7 +65,7 @@ function vote(bids) {
   // Get the first bid in the list
   var bid = bids.pop();
   console.log('Bid Weight: ' + bid.weight);
-  steem.broadcast.vote(config.posting_key, account.name, bid.post.author, bid.post.permlink, bid.weight, function(err, result) {
+  steem.broadcast.vote(posting_key, account.name, bid.post.author, bid.post.permlink, bid.weight, function(err, result) {
   //  console.log(err, result);
 
     if(!err && result) {
@@ -80,7 +79,7 @@ function vote(bids) {
         var content = config.promotion_content.replace(/\{weight\}/g, utils.format(bid.weight / 100)).replace(/\{sender\}/g, bid.sender);
 
         // Broadcast the comment
-        steem.broadcast.comment(config.posting_key, bid.post.author, bid.post.permlink, account.name, permlink, permlink, content, '', function(err, result) {
+        steem.broadcast.comment(posting_key, bid.post.author, bid.post.permlink, account.name, permlink, permlink, content, '', function(err, result) {
           console.log(err, result);
         });
       }
