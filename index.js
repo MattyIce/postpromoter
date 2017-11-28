@@ -6,6 +6,13 @@ var account = null;
 var last_trans = 0;
 var outstanding_bids = [];
 var config = null;
+
+if(process.argv.length < 3)
+{
+    console.log('Usage: node index.js [posting_key]');
+    process.exit();
+}
+
 var posting_key = process.argv[2];
 
 steem.api.setOptions({ url: 'https://api.steemit.com' });
