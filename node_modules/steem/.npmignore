@@ -1,0 +1,9 @@
+npm-debug.log
+.github
+.babelrc
+/doc
+/examples
+/src
+
+# WebStorm
+.idea

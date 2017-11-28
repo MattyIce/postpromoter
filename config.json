@@ -1,0 +1,9 @@
+{
+  "account": "postpromoter",
+  "posting_key": "5KGJtPyy8C5fKeBnLbFPhtWYU2JfTaACYc1E3rAx4dNCSiWd15B",
+  "min_bid": 0.1,
+  "max_bid": 1,
+  "max_post_age": 144,
+  "allow_comments": true,
+  "promotion_content": "You got a {weight}% upvote from @postpromoter courtesy of @{sender}!"
+}
