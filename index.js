@@ -6,6 +6,7 @@ var account = null;
 var last_trans = 0;
 var outstanding_bids = [];
 var config = null;
+var start_time = new Date();
 
 if(process.argv.length < 3)
 {
@@ -58,7 +59,7 @@ function startProcess() {
 function startVoting(bids) {
   // Sum the amounts of all of the bids
   var total = bids.reduce(function(total, bid) { return total + bid.amount; }, 0);
-  console.log('Round Total: ' + total);
+  console.log('\nStarting to vote! Total bids: $' + total);
 
   for(var i = 0; i < bids.length; i++) {
     // Calculate the vote weight to be used for each bid based on the amount bid as a percentage of the total bids
@@ -73,12 +74,11 @@ function vote(bids) {
   var bid = bids.pop();
   console.log('Bid Weight: ' + bid.weight);
   steem.broadcast.vote(posting_key, account.name, bid.post.author, bid.post.permlink, bid.weight, function(err, result) {
-  //  console.log(err, result);
-
-    if(!err && result) {
+    if (!err && result) {
+      console.log(utils.format(bid.weight / 100) + '% vote cast for: @' + bid.post.author + '/' + bid.post.permlink);
 
       // If promotion content is specified in the config then use it to comment on the upvoted post
-      if(config.promotion_content && config.promotion_content != '') {
+      if (config.promotion_content && config.promotion_content != '') {
         // Generate the comment permlink via steemit standard convention
         var permlink = 're-' + bid.post.author + '-' + bid.post.permlink + '-' + new Date().toISOString().replace(/-|:|\./g, '').toLowerCase();
 
@@ -86,11 +86,13 @@ function vote(bids) {
         var content = config.promotion_content.replace(/\{weight\}/g, utils.format(bid.weight / 100)).replace(/\{sender\}/g, bid.sender);
 
         // Broadcast the comment
-        steem.broadcast.comment(posting_key, bid.post.author, bid.post.permlink, account.name, permlink, permlink, content, '', function(err, result) {
-          console.log(err, result);
+        steem.broadcast.comment(posting_key, bid.post.author, bid.post.permlink, account.name, permlink, permlink, content, '', function (err, result) {
+          if (err)
+            console.log(err, result);
         });
       }
-    }
+    } else
+      console.log(err, result);
   });
 
   // If there are more bids, vote on the next one after 20 seconds
@@ -101,15 +103,16 @@ function vote(bids) {
 function getTransactions() {
   steem.api.getAccountHistory(account.name, -1, 50, function (err, result) {
     result.forEach(function(trans) {
-        var op = trans[1].op;
+      var op = trans[1].op;
+      var ts = new Date((trans[1].timestamp) + 'Z');
 
         // Check that this is a new transaction that we haven't processed already
-        if(trans[0] > last_trans) {
+        if(ts > start_time && trans[0] > last_trans) {
 
           // We only care about SBD transfers to the bot
           if (op[0] == 'transfer' && op[1].to == account.name && op[1].amount.indexOf('SBD') > 0) {
             var amount = parseFloat(op[1].amount.replace(" SBD", ""));
-            console.log("*** Incoming Transaction! Amount: " + amount + " SBD, memo: " + op[1].memo);
+            console.log("\nIncoming Bid! From: " + op[1].from + ", Amount: " + amount + " SBD, memo: " + op[1].memo);
 
             // Check for min and max bid values in configuration settings
             var min_bid = config.min_bid ? parseFloat(config.min_bid) : 0;
@@ -130,20 +133,17 @@ function getTransactions() {
           // Save the ID of the last transaction that was processed.
           last_trans = trans[0];
         }
-
-        //console.log(trans);
     });
   });
 }
 
 function checkPost(memo, amount, sender) {
+    // Parse the author and permlink from the memo URL
     var permLink = memo.substr(memo.lastIndexOf('/') + 1);
     var author = memo.substring(memo.lastIndexOf('@') + 1, memo.lastIndexOf('/'));
-    console.log('Checking Post: ' + author + '/' + permLink);
 
     steem.api.getContent(author, permLink, function (err, result) {
         if (!err && result && result.id > 0) {
-            console.log('Loaded Post: ' + result.title);
 
             // If comments are not allowed then we need to first check if the post is a comment
             if(!config.allow_comments && (result.parent_author != null && result.parent_author != '')) {
