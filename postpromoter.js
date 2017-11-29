@@ -7,14 +7,7 @@ var last_trans = 0;
 var outstanding_bids = [];
 var config = null;
 var start_time = new Date();
-
-if(process.argv.length < 3)
-{
-    console.log('Usage: node index.js [posting_key]');
-    process.exit();
-}
-
-var posting_key = process.argv[2];
+var posting_key = process.env.POSTING_KEY;
 
 steem.api.setOptions({ url: 'https://api.steemit.com' });
 
@@ -35,12 +28,8 @@ function startProcess() {
   if(account) {
     getTransactions();
 
-    // Load and log the current voting power of the account
+    // Load the current voting power of the account
     var vp = utils.getVotingPower(account);
-    process.stdout.clearLine();
-    process.stdout.cursorTo(0);
-    process.stdout.write("Voting Power: " + vp);
-
 
     // We are at 100% voting power - time to vote!
     if(vp >= 10000 && outstanding_bids.length > 0) {
