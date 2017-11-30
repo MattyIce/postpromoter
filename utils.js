@@ -91,6 +91,10 @@ function timeTilFullPower(account){
      return effective_vesting_shares;
  }
 
+ function getCurrency(amount) {
+   return amount.substr(amount.indexOf(' ') + 1);
+ }
+
 function format(n, c, d, t) {
   var c = isNaN(c = Math.abs(c)) ? 2 : c,
       d = d == undefined ? "." : d,
@@ -106,5 +110,6 @@ function format(n, c, d, t) {
    getVoteValue: getVoteValue,
    timeTilFullPower: timeTilFullPower,
    getVestingShares: getVestingShares,
+   getCurrency: getCurrency,
    format: format
  }
