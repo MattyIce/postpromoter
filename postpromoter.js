@@ -7,8 +7,6 @@ var last_trans = 0;
 var outstanding_bids = [];
 var config = null;
 var start_time = new Date();
-var posting_key = process.env.POSTING_KEY;
-var active_key = process.env.ACTIVE_KEY;
 
 steem.api.setOptions({ url: 'https://api.steemit.com' });
 
@@ -46,7 +44,9 @@ function startProcess() {
 function startVoting(bids) {
   // Sum the amounts of all of the bids
   var total = bids.reduce(function(total, bid) { return total + bid.amount; }, 0);
-  console.log('\nStarting to vote! Total bids: $' + total);
+  console.log('\n=======================================================');
+  console.log('Bidding Round End! Starting to vote! Total bids: $' + total);
+  console.log('=======================================================\n');
 
   for(var i = 0; i < bids.length; i++) {
     // Calculate the vote weight to be used for each bid based on the amount bid as a percentage of the total bids
@@ -60,20 +60,20 @@ function vote(bids) {
   // Get the first bid in the list
   var bid = bids.pop();
   console.log('Bid Weight: ' + bid.weight);
-  steem.broadcast.vote(posting_key, account.name, bid.post.author, bid.post.permlink, bid.weight, function(err, result) {
+  steem.broadcast.vote(config.posting_key, account.name, bid.post.author, bid.post.permlink, bid.weight, function(err, result) {
     if (!err && result) {
       console.log(utils.format(bid.weight / 100) + '% vote cast for: @' + bid.post.author + '/' + bid.post.permlink);
 
       // If promotion content is specified in the config then use it to comment on the upvoted post
       if (config.promotion_content && config.promotion_content != '') {
         // Generate the comment permlink via steemit standard convention
-        var permlink = 're-' + bid.post.author + '-' + bid.post.permlink + '-' + new Date().toISOString().replace(/-|:|\./g, '').toLowerCase();
+        var permlink = 're-' + bid.post.author.replace(/\./g, '') + '-' + bid.post.permlink + '-' + new Date().toISOString().replace(/-|:|\./g, '').toLowerCase();
 
         // Replace variables in the promotion content
         var content = config.promotion_content.replace(/\{weight\}/g, utils.format(bid.weight / 100)).replace(/\{sender\}/g, bid.sender);
 
         // Broadcast the comment
-        steem.broadcast.comment(posting_key, bid.post.author, bid.post.permlink, account.name, permlink, permlink, content, '', function (err, result) {
+        steem.broadcast.comment(config.posting_key, bid.post.author, bid.post.permlink, account.name, permlink, permlink, content, '', function (err, result) {
           if (err)
             console.log(err, result);
         });
@@ -183,7 +183,7 @@ function refund(sender, amount, currency, reason) {
   }
 
   // Issue the refund.
-  steem.broadcast.transfer(active_key, config.account, sender, utils.format(amount, 3) + ' ' + currency, 'Refund for invalid bid - ' + reason, function(err, response) {
+  steem.broadcast.transfer(config.active_key, config.account, sender, utils.format(amount, 3) + ' ' + currency, 'Refund for invalid bid - ' + reason, function(err, response) {
     if(err)
       console.log(err, response);
     else {

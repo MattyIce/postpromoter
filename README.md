@@ -6,17 +6,14 @@ $ git clone https://github.com/MattyIce/postpromoter.git
 ```
 
 ## Configuration
-Set the POSTING_KEY and ACTIVE_KEY environment variables to the private posting and active keys of the bot account. Active key is only required for refunds.
-```
-export POSTING_KEY=[posting_key]
-export ACTIVE_KEY=[active_key]
-```
 
 Set the following options in config.json:
 ```
 {
   "disabled_mode": false, // Set this to true to refund all funds sent to the bot
   "account": "yourbotaccount",
+  "posting_key": "your_posting_key",
+  "active_key": "your_active_key",
   "min_bid": 0.1,
   "max_bid": 999,
   "batch_vote_weight": 100,
@@ -31,5 +28,5 @@ Set the following options in config.json:
 
 ## Run
 ```
-node postpromoter.js
+$ nodejs postpromoter.js
 ```
