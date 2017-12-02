@@ -1,6 +1,6 @@
 {
   "disabled_mode": false,
-  "account": "postpromoter",
+  "account": "your_bot_account_name",
   "posting_key": "your_posting_key",
   "active_key": "your_active_key",
   "min_bid": 0.1,

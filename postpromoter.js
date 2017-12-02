@@ -6,11 +6,24 @@ var account = null;
 var last_trans = 0;
 var outstanding_bids = [];
 var config = null;
-var start_time = new Date();
+var first_load = true;
 
 steem.api.setOptions({ url: 'https://api.steemit.com' });
 
 console.log("\n *START* \n");
+
+// Check if bot state has been saved to disk, in which case load it
+if (fs.existsSync('state.json')) {
+  var state = JSON.parse(fs.readFileSync("state.json"));
+
+  if (state.last_trans)
+    last_trans = state.last_trans;
+
+  if (state.outstanding_bids)
+    outstanding_bids = state.outstanding_bids;
+
+  console.log('Restored saved bot state: ' + JSON.stringify(state));
+}
 
 startProcess();
 
@@ -36,6 +49,9 @@ function startProcess() {
       // Reset the list of outstanding bids for the next round
       outstanding_bids = [];
     }
+
+    // Save the state of the bot to disk.
+    saveState();
   }
 
   setTimeout(startProcess, 5000);
@@ -60,20 +76,20 @@ function vote(bids) {
   // Get the first bid in the list
   var bid = bids.pop();
   console.log('Bid Weight: ' + bid.weight);
-  steem.broadcast.vote(config.posting_key, account.name, bid.post.author, bid.post.permlink, bid.weight, function(err, result) {
+  steem.broadcast.vote(config.posting_key, account.name, bid.author, bid.permlink, bid.weight, function(err, result) {
     if (!err && result) {
-      console.log(utils.format(bid.weight / 100) + '% vote cast for: @' + bid.post.author + '/' + bid.post.permlink);
+      console.log(utils.format(bid.weight / 100) + '% vote cast for: @' + bid.author + '/' + bid.permlink);
 
       // If promotion content is specified in the config then use it to comment on the upvoted post
       if (config.promotion_content && config.promotion_content != '') {
         // Generate the comment permlink via steemit standard convention
-        var permlink = 're-' + bid.post.author.replace(/\./g, '') + '-' + bid.post.permlink + '-' + new Date().toISOString().replace(/-|:|\./g, '').toLowerCase();
+        var permlink = 're-' + bid.author.replace(/\./g, '') + '-' + bid.permlink + '-' + new Date().toISOString().replace(/-|:|\./g, '').toLowerCase();
 
         // Replace variables in the promotion content
         var content = config.promotion_content.replace(/\{weight\}/g, utils.format(bid.weight / 100)).replace(/\{sender\}/g, bid.sender);
 
         // Broadcast the comment
-        steem.broadcast.comment(config.posting_key, bid.post.author, bid.post.permlink, account.name, permlink, permlink, content, '', function (err, result) {
+        steem.broadcast.comment(config.posting_key, bid.author, bid.permlink, account.name, permlink, permlink, content, '', function (err, result) {
           if (err)
             console.log(err, result);
         });
@@ -88,13 +104,28 @@ function vote(bids) {
 }
 
 function getTransactions() {
-  steem.api.getAccountHistory(account.name, -1, 50, function (err, result) {
+  var num_trans = 50;
+
+  // If this is the first time the bot is ever being run, start with just the most recent transaction
+  if (first_load && last_trans == 0) {
+    console.log('First run - starting with last transaction on account.');
+    num_trans = 1;
+  }
+  
+  // If this is the first time the bot is run after a restart get a larger list of transactions to make sure none are missed
+  if (first_load && last_trans > 0) {
+    console.log('First run - loading all transactions since bot was stopped.');
+    num_trans = 1000;
+  }
+
+  steem.api.getAccountHistory(account.name, -1, num_trans, function (err, result) {
+    first_load = false;
+
     result.forEach(function(trans) {
       var op = trans[1].op;
-      var ts = new Date((trans[1].timestamp) + 'Z');
 
         // Check that this is a new transaction that we haven't processed already
-        if(ts > start_time && trans[0] > last_trans) {
+        if(trans[0] > last_trans) {
 
           // We only care about SBD transfers to the bot
           if (op[0] == 'transfer' && op[1].to == account.name) {
@@ -156,11 +187,10 @@ function checkPost(memo, amount, sender) {
 
             // Get the list of votes on this post to make sure the bot didn't already vote on it (you'd be surprised how often people double-submit!)
             var votes = result.active_votes.filter(function(vote) { return vote.voter == account.name; });
-            var already_voted = votes.length > 0 && (new Date() - new Date(votes[0].time + 'Z') > 20 * 60 * 1000);
 
-            if(already_voted || (new Date() - created) >= (config.max_post_age * 60 * 60 * 1000)) {
+            if (votes.length > 0 || (new Date() - created) >= (config.max_post_age * 60 * 60 * 1000)) {
                 // This post is already voted on by this bot or the post is too old to be voted on
-                refund(sender, amount, 'SBD', (already_voted ? 'Already Voted' : 'Post older than max age'));
+                refund(sender, amount, 'SBD', ((votes.length > 0) ? 'Already Voted' : 'Post older than max age'));
                 return;
             }
         } else {
@@ -171,8 +201,18 @@ function checkPost(memo, amount, sender) {
 
         // All good - push to the array of valid bids for this round
         console.log('Valid Bid - Amount: ' + amount + ', Title: ' + result.title);
-        outstanding_bids.push({ amount: amount, sender: sender, post: result });
+        outstanding_bids.push({ amount: amount, sender: sender, author: result.author, permlink: result.permlink });
     });
+}
+
+function saveState() {
+  // Save the state of the bot to disk
+  fs.writeFile('state.json', JSON.stringify({ outstanding_bids: outstanding_bids, last_trans: last_trans }), function (err) {
+    if (err)
+      console.log(err);
+  });
+
+  console.log('Saving state: ' + JSON.stringify({ bids: outstanding_bids, last_trans: last_trans }));
 }
 
 function refund(sender, amount, currency, reason) {
