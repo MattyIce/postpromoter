@@ -211,8 +211,6 @@ function saveState() {
     if (err)
       console.log(err);
   });
-
-  console.log('Saving state: ' + JSON.stringify({ bids: outstanding_bids, last_trans: last_trans }));
 }
 
 function refund(sender, amount, currency, reason) {
