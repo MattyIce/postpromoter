@@ -8,7 +8,7 @@ var last_trans = 0;
 var outstanding_bids = [];
 var config = null;
 var first_load = true;
-
+var reward_claim = false;
 
 steem.api.setOptions({ url: 'https://api.steemit.com' });
 
@@ -35,6 +35,8 @@ function startProcess() {
 
   steem.api.getAccounts([config.account], function(err, result) {
     account = result[0];
+    balance = account.sbd_balance;
+    console.log(account.sbd_balance);
   });
 
   if(account) {
@@ -45,6 +47,22 @@ function startProcess() {
 
     // Save the state of the bot to disk.
     saveState();
+
+    // We are at around 90% voting power good time to claim a rewards!
+    if(config.auto_claim_rewards && !reward_claim && vp > 9000 && vp < 9001) {
+      //Make api call only if you have actual reward 
+      if (account.reward_steem_balance.replace(/[^0-9]/g, '') > 0 || account.reward_sbd_balance.replace(/[^0-9]/g, '') > 0 || account.reward_vesting_balance.replace(/[^0-9]/g, '') > 0) {
+        steem.broadcast.claimRewardBalance (config.posting_key, config.account, account.reward_steem_balance, account.reward_sbd_balance, account.reward_vesting_balance, function(err, result) {
+          if (err) {
+            console.log(err);
+          } 
+          if (result) {
+            reward_claim = true;
+            console.log('$$$ Rewards Claim SBD:' + account.reward_sbd_balance + ', STEEM:' + account.reward_steem_balance + ', Vesting:' + account.reward_vesting_balance);
+          }
+        });
+      }
+    }
   }
 
   botcycle = setTimeout(startProcess, 5000);
@@ -59,6 +77,8 @@ function startProcess() {
 
     // Reset the list of outstanding bids for the next round
     outstanding_bids = [];
+    //Reset reward_claim var
+    reward_claim = false;
   }
 }
 
