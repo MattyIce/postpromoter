@@ -14,6 +14,7 @@ Set the following options in config.json:
   "account": "yourbotaccount",
   "posting_key": "your_posting_key",
   "active_key": "your_active_key",
+  "auto_claim_rewards" : true, // Set to false if you dont want to claim rewards automatical
   "min_bid": 0.1,
   "max_bid": 999,
   "batch_vote_weight": 100,
