@@ -2,12 +2,12 @@ var fs = require("fs");
 const steem = require('steem');
 var utils = require('./utils');
 
-var processTimer = -1;
 var account = null;
 var last_trans = 0;
 var outstanding_bids = [];
 var config = null;
 var first_load = true;
+var isVoting = false;
 
 steem.api.setOptions({ url: 'https://api.steemit.com' });
 
@@ -26,7 +26,8 @@ if (fs.existsSync('state.json')) {
   console.log('Restored saved bot state: ' + JSON.stringify(state));
 }
 
-startProcess();
+// Schedule to run every 10 seconds
+setInterval(startProcess, 10000);
 
 function startProcess() {
   // Load the settings from the config file each time so we can pick up any changes
@@ -40,7 +41,7 @@ function startProcess() {
     claimRewards();
   });
 
-  if (account) {
+  if (account && !isVoting) {
     getTransactions();
 
     // Load the current voting power of the account
@@ -50,11 +51,10 @@ function startProcess() {
     if (vp >= 10000 && outstanding_bids.length > 0) {
 
       // Don't process any bids while we are voting due to race condition (they will be processed when voting is done).
-      if(processTimer > 0)
-        clearTimeout(processTimer);
+      isVoting = true;
 
       // Make a copy of the list of outstanding bids and vote on them
-      startVoting(outstanding_bids.slice());
+      startVoting(outstanding_bids.slice().reverse());
 
       // Reset the list of outstanding bids for the next round
       outstanding_bids = [];
@@ -63,8 +63,6 @@ function startProcess() {
     // Save the state of the bot to disk.
     saveState();
   }
-
-  processTimer = setTimeout(startProcess, 5000);
 }
 
 function startVoting(bids) {
@@ -115,7 +113,7 @@ function vote(bids) {
     console.log('\n=======================================================');
     console.log('Voting Complete!');
     console.log('=======================================================\n');
-    startProcess();
+    isVoting = false;
   }
 }
 
@@ -127,7 +125,7 @@ function getTransactions() {
     console.log('First run - starting with last transaction on account.');
     num_trans = 1;
   }
-  
+
   // If this is the first time the bot is run after a restart get a larger list of transactions to make sure none are missed
   if (first_load && last_trans > 0) {
     console.log('First run - loading all transactions since bot was stopped.');
@@ -250,7 +248,7 @@ function claimRewards() {
   if (!config.auto_claim_rewards)
     return;
 
-  // Make api call only if you have actual reward 
+  // Make api call only if you have actual reward
   if (parseFloat(account.reward_steem_balance) > 0 || parseFloat(account.reward_sbd_balance) > 0 || parseFloat(account.reward_vesting_balance) > 0) {
     steem.broadcast.claimRewardBalance(config.posting_key, config.account, account.reward_steem_balance, account.reward_sbd_balance, account.reward_vesting_balance, function (err, result) {
       if (err) {
