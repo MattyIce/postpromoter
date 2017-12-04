@@ -3,6 +3,7 @@
   "account": "your_bot_account_name",
   "posting_key": "your_posting_key",
   "active_key": "your_active_key",
+  "auto_claim_rewards" : true,
   "min_bid": 0.1,
   "max_bid": 999,
   "batch_vote_weight": 100,
@@ -11,5 +12,5 @@
   "blacklist": ["account1", "account2"],
   "refunds_enabled": true,
   "no_refund": ["bittrex", "poloniex", "openledger", "blocktrades"],
-  "promotion_content": "You got a {weight}% upvote from @postpromoter courtesy of @{sender}!"
+  "promotion_content": "You got a {weight}% upvote from @{botname} courtesy of @{sender}!"
 }

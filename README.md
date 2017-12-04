@@ -14,6 +14,7 @@ Set the following options in config.json:
   "account": "yourbotaccount",
   "posting_key": "your_posting_key",
   "active_key": "your_active_key",
+  "auto_claim_rewards" : true, // Set to false if you dont want to claim rewards automatical
   "min_bid": 0.1,
   "max_bid": 999,
   "batch_vote_weight": 100,
@@ -22,7 +23,7 @@ Set the following options in config.json:
   "blacklist": ["account1", "account2"], // List of blacklisted accounts
   "refunds_enabled": true,
   "no_refund": ["bittrex", "poloniex", "openledger", "blocktrades"], // Don't refund transactions from these accounts!
-  "promotion_content": "You got a {weight}% upvote from @postpromoter courtesy of @{sender}!" // Change this to whatever you want the bot to post as a comment when it votes, or leave it out or blank for no comment
+  "promotion_content": "You got a {weight}% upvote from @{botname} courtesy of @{sender}!" // Change this to whatever you want the bot to post as a comment when it votes, or leave it out or blank for no comment
 }
 ```
 
