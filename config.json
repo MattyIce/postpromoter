@@ -12,5 +12,11 @@
   "blacklist": ["account1", "account2"],
   "refunds_enabled": true,
   "no_refund": ["bittrex", "poloniex", "openledger", "blocktrades"],
-  "promotion_content": "You got a {weight}% upvote from @{botname} courtesy of @{sender}!"
+  "promotion_content": "You got a {weight}% upvote from @{botname} courtesy of @{sender}!",
+  "auto_withdrawal": {
+    "active": true,
+    "to_account": "account_to_receive",
+    "execute_time": "20:00:00",
+    "memo": "#Today generated SBD - {balance} | Thank you."
+  }
 }

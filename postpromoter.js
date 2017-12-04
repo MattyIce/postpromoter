@@ -27,6 +27,7 @@ if (fs.existsSync('state.json')) {
   console.log('Restored saved bot state: ' + JSON.stringify(state));
 }
 
+
 startProcess();
 
 function startProcess() {
@@ -36,7 +37,7 @@ function startProcess() {
   steem.api.getAccounts([config.account], function(err, result) {
     account = result[0];
     balance = account.sbd_balance;
-    console.log(account.sbd_balance);
+    
   });
 
   if(account) {
@@ -80,6 +81,29 @@ function startProcess() {
     //Reset reward_claim var
     reward_claim = false;
   }
+}
+
+// If auto withdrawal is active proceed
+if (config.auto_withdrawal.active) {
+
+  var execute_time = config.auto_withdrawal.execute_time;
+
+  setInterval(function () {
+    var d = new Date();
+   
+    if ( (`0${d.getHours()}`).slice(-2) === execute_time.split(":")[0] && (`0${d.getMinutes()}`).slice(-2) === execute_time.split(":")[1] && (`0${d.getSeconds()}`).slice(-2) === execute_time.split(":")[2]) {
+    
+      var message = config.auto_withdrawal.memo.replace(/\{balance\}/g, balance);
+      // Send all SBD
+      steem.broadcast.transfer(config.active_key, config.account, config.auto_withdrawal.to_account, balance, message, function(err, response) {
+        if(err)
+          console.log(err, response);
+        else {
+          console.log('$$$ Auto withdrawal: ' + balance + ' ' + 'SBD' + ' sent to @' + config.auto_withdrawal.to_account);
+        }
+      });
+    }
+  }, 1000);
 }
 
 function startVoting(bids) {
