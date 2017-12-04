@@ -2,13 +2,12 @@ var fs = require("fs");
 const steem = require('steem');
 var utils = require('./utils');
 
-var botcycle;
+var processTimer = -1;
 var account = null;
 var last_trans = 0;
 var outstanding_bids = [];
 var config = null;
 var first_load = true;
-var reward_claim = false;
 
 steem.api.setOptions({ url: 'https://api.steemit.com' });
 
@@ -33,53 +32,39 @@ function startProcess() {
   // Load the settings from the config file each time so we can pick up any changes
   config = JSON.parse(fs.readFileSync("config.json"));
 
-  steem.api.getAccounts([config.account], function(err, result) {
+  // Load the bot account info
+  steem.api.getAccounts([config.account], function (err, result) {
     account = result[0];
-    balance = account.sbd_balance;
-    console.log(account.sbd_balance);
+
+    // Check if there are any rewards to claim.
+    claimRewards();
   });
 
-  if(account) {
+  if (account) {
     getTransactions();
 
     // Load the current voting power of the account
     var vp = utils.getVotingPower(account);
 
+    // We are at 100% voting power - time to vote!
+    if (vp >= 10000 && outstanding_bids.length > 0) {
+
+      // Don't process any bids while we are voting due to race condition (they will be processed when voting is done).
+      if(processTimer > 0)
+        clearTimeout(processTimer);
+
+      // Make a copy of the list of outstanding bids and vote on them
+      startVoting(outstanding_bids.slice());
+
+      // Reset the list of outstanding bids for the next round
+      outstanding_bids = [];
+    }
+
     // Save the state of the bot to disk.
     saveState();
-
-    // We are at around 90% voting power good time to claim a rewards!
-    if(config.auto_claim_rewards && !reward_claim && vp > 9000 && vp < 9001) {
-      //Make api call only if you have actual reward 
-      if (account.reward_steem_balance.replace(/[^0-9]/g, '') > 0 || account.reward_sbd_balance.replace(/[^0-9]/g, '') > 0 || account.reward_vesting_balance.replace(/[^0-9]/g, '') > 0) {
-        steem.broadcast.claimRewardBalance (config.posting_key, config.account, account.reward_steem_balance, account.reward_sbd_balance, account.reward_vesting_balance, function(err, result) {
-          if (err) {
-            console.log(err);
-          } 
-          if (result) {
-            reward_claim = true;
-            console.log('$$$ Rewards Claim SBD:' + account.reward_sbd_balance + ', STEEM:' + account.reward_steem_balance + ', Vesting:' + account.reward_vesting_balance);
-          }
-        });
-      }
-    }
   }
 
-  botcycle = setTimeout(startProcess, 5000);
-
-  // We are at 100% voting power - time to vote!
-  if(vp >= 10000 && outstanding_bids.length > 0) {
-    
-    clearTimeout(botcycle);
-   
-    // Make a copy of the list of outstanding bids and vote on them
-    startVoting(outstanding_bids.slice());
-
-    // Reset the list of outstanding bids for the next round
-    outstanding_bids = [];
-    //Reset reward_claim var
-    reward_claim = false;
-  }
+  processTimer = setTimeout(startProcess, 5000);
 }
 
 function startVoting(bids) {
@@ -128,11 +113,10 @@ function vote(bids) {
     setTimeout(function() { vote(bids); }, 30000);
   } else {
     console.log('\n=======================================================');
-    console.log('Vote round ends');
+    console.log('Voting Complete!');
     console.log('=======================================================\n');
     startProcess();
   }
-
 }
 
 function getTransactions() {
@@ -260,4 +244,22 @@ function refund(sender, amount, currency, reason) {
       console.log('Refund of ' + amount + ' ' + currency + ' sent to @' + sender + ' for reason: ' + reason);
     }
   });
+}
+
+function claimRewards() {
+  if (!config.auto_claim_rewards)
+    return;
+
+  // Make api call only if you have actual reward 
+  if (parseFloat(account.reward_steem_balance) > 0 || parseFloat(account.reward_sbd_balance) > 0 || parseFloat(account.reward_vesting_balance) > 0) {
+    steem.broadcast.claimRewardBalance(config.posting_key, config.account, account.reward_steem_balance, account.reward_sbd_balance, account.reward_vesting_balance, function (err, result) {
+      if (err) {
+        console.log(err);
+      }
+
+      if (result) {
+        console.log('$$$ Rewards Claim SBD:' + account.reward_sbd_balance + ', STEEM:' + account.reward_steem_balance + ', Vesting:' + account.reward_vesting_balance);
+      }
+    });
+  }
 }
