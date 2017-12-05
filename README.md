@@ -27,7 +27,7 @@ Set the following options in config.json:
   "auto_withdrawal": {
     "active": true, // Activate the auto withdrawal function
     "to_account": "account_to_receive", // account to receive 
-    "execute_time": "20:00:00", // Time to be executed
+    "execute_time": 20, // Hour of the day to execute the withdrawal (0 - 23)
     "memo": "#Today generated SBD - {balance} | Thank you." // Transaction memo
   }
 }

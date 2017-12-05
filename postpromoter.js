@@ -8,6 +8,7 @@ var outstanding_bids = [];
 var config = null;
 var first_load = true;
 var isVoting = false;
+var last_withdrawal = null;
 
 steem.api.setOptions({ url: 'https://api.steemit.com' });
 
@@ -23,6 +24,9 @@ if (fs.existsSync('state.json')) {
   if (state.outstanding_bids)
     outstanding_bids = state.outstanding_bids;
 
+  if(state.last_withdrawal)
+    last_withdrawal = state.last_withdrawal;
+
   console.log('Restored saved bot state: ' + JSON.stringify(state));
 }
 
@@ -36,10 +40,12 @@ function startProcess() {
   // Load the bot account info
   steem.api.getAccounts([config.account], function (err, result) {
     account = result[0];
-    balance = account.sbd_balance;
 
     // Check if there are any rewards to claim.
     claimRewards();
+
+    // Check if it is time to withdraw funds.
+    checkAutoWithdraw();
   });
 
   if (account && !isVoting) {
@@ -64,29 +70,6 @@ function startProcess() {
     // Save the state of the bot to disk.
     saveState();
   }
-}
-
-// If auto withdrawal is active proceed
-if (config.auto_withdrawal.active) {
-
-  var execute_time = config.auto_withdrawal.execute_time;
-
-  setInterval(function () {
-    var d = new Date();
-   
-    if ( (`0${d.getHours()}`).slice(-2) === execute_time.split(":")[0] && (`0${d.getMinutes()}`).slice(-2) === execute_time.split(":")[1] && (`0${d.getSeconds()}`).slice(-2) === execute_time.split(":")[2]) {
-    
-      var message = config.auto_withdrawal.memo.replace(/\{balance\}/g, balance);
-      // Send all SBD
-      steem.broadcast.transfer(config.active_key, config.account, config.auto_withdrawal.to_account, balance, message, function(err, response) {
-        if(err)
-          console.log(err, response);
-        else {
-          console.log('$$$ Auto withdrawal: ' + balance + ' ' + 'SBD' + ' sent to @' + config.auto_withdrawal.to_account);
-        }
-      });
-    }
-  }, 1000);
 }
 
 function startVoting(bids) {
@@ -245,7 +228,7 @@ function checkPost(memo, amount, sender) {
 
 function saveState() {
   // Save the state of the bot to disk
-  fs.writeFile('state.json', JSON.stringify({ outstanding_bids: outstanding_bids, last_trans: last_trans }), function (err) {
+  fs.writeFile('state.json', JSON.stringify({ outstanding_bids: outstanding_bids, last_trans: last_trans, last_withdrawal: last_withdrawal }), function (err) {
     if (err)
       console.log(err);
   });
@@ -281,6 +264,29 @@ function claimRewards() {
 
       if (result) {
         console.log('$$$ Rewards Claim SBD:' + account.reward_sbd_balance + ', STEEM:' + account.reward_steem_balance + ', Vesting:' + account.reward_vesting_balance);
+      }
+    });
+  }
+}
+
+function checkAutoWithdraw() {
+  // Check if auto-withdraw is active
+  if (!config.auto_withdrawal.active)
+    return;
+
+  // If it's past the withdrawal time and we haven't made a withdrawal today and there is a positive SBD balance, then process the withdrawal
+  if (new Date(new Date().toDateString()) > new Date(last_withdrawal) && new Date().getHours() >= config.auto_withdrawal.execute_time && parseFloat(account.sbd_balance) > 0) {
+    // Save the date of the last withdrawal
+    last_withdrawal = new Date().toDateString();
+
+    var memo = config.auto_withdrawal.memo.replace(/\{balance\}/g, account.sbd_balance);
+
+    // Withdraw all available SBD to the specified account
+    steem.broadcast.transfer(config.active_key, config.account, config.auto_withdrawal.to_account, account.sbd_balance, memo, function (err, response) {
+      if (err)
+        console.log(err, response);
+      else {
+        console.log('$$$ Auto withdrawal: ' + account.sbd_balance + ' sent to @' + config.auto_withdrawal.to_account);
       }
     });
   }
