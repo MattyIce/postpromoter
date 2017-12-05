@@ -23,7 +23,13 @@ Set the following options in config.json:
   "blacklist": ["account1", "account2"], // List of blacklisted accounts
   "refunds_enabled": true,
   "no_refund": ["bittrex", "poloniex", "openledger", "blocktrades"], // Don't refund transactions from these accounts!
-  "promotion_content": "You got a {weight}% upvote from @{botname} courtesy of @{sender}!" // Change this to whatever you want the bot to post as a comment when it votes, or leave it out or blank for no comment
+  "promotion_content": "You got a {weight}% upvote from @{botname} courtesy of @{sender}!", // Change this to whatever you want the bot to post as a comment when it votes, or leave it out or blank for no comment
+  "auto_withdrawal": {
+    "active": true, // Activate the auto withdrawal function
+    "to_account": "account_to_receive", // account to receive 
+    "execute_time": "20:00:00", // Time to be executed
+    "memo": "#Today generated SBD - {balance} | Thank you." // Transaction memo
+  }
 }
 ```
 
