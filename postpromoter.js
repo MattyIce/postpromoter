@@ -279,15 +279,23 @@ function checkAutoWithdraw() {
     // Save the date of the last withdrawal
     last_withdrawal = new Date().toDateString();
 
-    var memo = config.auto_withdrawal.memo.replace(/\{balance\}/g, account.sbd_balance);
+    // Load account details of the account we are sending the withdrawal to (this is needed for encrypted memos)
+    steem.api.getAccounts([config.auto_withdrawal.to_account], function(err, result) {
+      var to_account = result[0];
+      var memo = config.auto_withdrawal.memo.replace(/\{balance\}/g, account.sbd_balance);
 
-    // Withdraw all available SBD to the specified account
-    steem.broadcast.transfer(config.active_key, config.account, config.auto_withdrawal.to_account, account.sbd_balance, memo, function (err, response) {
-      if (err)
-        console.log(err, response);
-      else {
-        console.log('$$$ Auto withdrawal: ' + account.sbd_balance + ' sent to @' + config.auto_withdrawal.to_account);
-      }
+      // Encrypt memo
+      if(memo.startsWith('#'))
+        memo = steem.memo.encode(config.memo_key, to_account.memo_key, memo);
+
+      // Withdraw all available SBD to the specified account
+      steem.broadcast.transfer(config.active_key, config.account, config.auto_withdrawal.to_account, account.sbd_balance, memo, function (err, response) {
+        if (err)
+          console.log(err, response);
+        else {
+          console.log('$$$ Auto withdrawal: ' + account.sbd_balance + ' sent to @' + config.auto_withdrawal.to_account);
+        }
+      });
     });
   }
 }
