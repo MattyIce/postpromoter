@@ -105,11 +105,14 @@ function format(n, c, d, t) {
    return s + (j ? i.substr(0, j) + t : "") + i.substr(j).replace(/(\d{3})(?=\d)/g, "$1" + t) + (c ? d + Math.abs(n - i).toFixed(c).slice(2) : "");
  }
 
+ function log(msg) { console.log(new Date().toString() + ' - ' + msg); }
+
  module.exports = {
    getVotingPower: getVotingPower,
    getVoteValue: getVoteValue,
    timeTilFullPower: timeTilFullPower,
    getVestingShares: getVestingShares,
    getCurrency: getCurrency,
-   format: format
+   format: format,
+   log: log
  }

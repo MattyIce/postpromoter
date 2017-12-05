@@ -12,7 +12,7 @@ var last_withdrawal = null;
 
 steem.api.setOptions({ url: 'https://api.steemit.com' });
 
-console.log("\n *START* \n");
+utils.log("*START*");
 
 // Check if bot state has been saved to disk, in which case load it
 if (fs.existsSync('state.json')) {
@@ -27,7 +27,7 @@ if (fs.existsSync('state.json')) {
   if(state.last_withdrawal)
     last_withdrawal = state.last_withdrawal;
 
-  console.log('Restored saved bot state: ' + JSON.stringify(state));
+  utils.log('Restored saved bot state: ' + JSON.stringify(state));
 }
 
 // Schedule to run every 10 seconds
@@ -75,9 +75,9 @@ function startProcess() {
 function startVoting(bids) {
   // Sum the amounts of all of the bids
   var total = bids.reduce(function(total, bid) { return total + bid.amount; }, 0);
-  console.log('\n=======================================================');
-  console.log('Bidding Round End! Starting to vote! Total bids: $' + total);
-  console.log('=======================================================\n');
+  utils.log('=======================================================');
+  utils.log('Bidding Round End! Starting to vote! Total bids: $' + total);
+  utils.log('=======================================================');
 
   for(var i = 0; i < bids.length; i++) {
     // Calculate the vote weight to be used for each bid based on the amount bid as a percentage of the total bids
@@ -90,10 +90,10 @@ function startVoting(bids) {
 function vote(bids) {
   // Get the first bid in the list
   var bid = bids.pop();
-  console.log('Bid Weight: ' + bid.weight);
+  utils.log('Bid Weight: ' + bid.weight);
   steem.broadcast.vote(config.posting_key, account.name, bid.author, bid.permlink, bid.weight, function(err, result) {
     if (!err && result) {
-      console.log(utils.format(bid.weight / 100) + '% vote cast for: @' + bid.author + '/' + bid.permlink);
+      utils.log(utils.format(bid.weight / 100) + '% vote cast for: @' + bid.author + '/' + bid.permlink);
 
       // If promotion content is specified in the config then use it to comment on the upvoted post
       if (config.promotion_content && config.promotion_content != '') {
@@ -104,22 +104,22 @@ function vote(bids) {
         var content = config.promotion_content.replace(/\{weight\}/g, utils.format(bid.weight / 100)).replace(/\{botname\}/g, config.account).replace(/\{sender\}/g, bid.sender);
 
         // Broadcast the comment
-        steem.broadcast.comment(config.posting_key, bid.author, bid.permlink, account.name, permlink, permlink, content, '', function (err, result) {
+        steem.broadcast.comment(config.posting_key, bid.author, bid.permlink, account.name, permlink, permlink, content, '{"app":"postpromoter/1.2.0"}', function (err, result) {
           if (err)
-            console.log(err, result);
+            utils.log(err, result);
         });
       }
     } else
-      console.log(err, result);
+      utils.log(err, result);
   });
 
   // If there are more bids, vote on the next one after 20 seconds
   if(bids.length > 0) {
     setTimeout(function() { vote(bids); }, 30000);
   } else {
-    console.log('\n=======================================================');
-    console.log('Voting Complete!');
-    console.log('=======================================================\n');
+    utils.log('=======================================================');
+    utils.log('Voting Complete!');
+    utils.log('=======================================================');
     isVoting = false;
   }
 }
@@ -129,13 +129,13 @@ function getTransactions() {
 
   // If this is the first time the bot is ever being run, start with just the most recent transaction
   if (first_load && last_trans == 0) {
-    console.log('First run - starting with last transaction on account.');
+    utils.log('First run - starting with last transaction on account.');
     num_trans = 1;
   }
 
   // If this is the first time the bot is run after a restart get a larger list of transactions to make sure none are missed
   if (first_load && last_trans > 0) {
-    console.log('First run - loading all transactions since bot was stopped.');
+    utils.log('First run - loading all transactions since bot was stopped.');
     num_trans = 1000;
   }
 
@@ -152,7 +152,7 @@ function getTransactions() {
           if (op[0] == 'transfer' && op[1].to == account.name) {
             var amount = parseFloat(op[1].amount);
             var currency = utils.getCurrency(op[1].amount);
-            console.log("\nIncoming Bid! From: " + op[1].from + ", Amount: " + op[1].amount + ", memo: " + op[1].memo);
+            utils.log("Incoming Bid! From: " + op[1].from + ", Amount: " + op[1].amount + ", memo: " + op[1].memo);
 
             // Check for min and max bid values in configuration settings
             var min_bid = config.min_bid ? parseFloat(config.min_bid) : 0;
@@ -191,7 +191,7 @@ function checkPost(memo, amount, sender) {
     // Make sure the author isn't on the blacklist!
     if(config.blacklist && config.blacklist.indexOf(author) >= 0)
     {
-      console.log('Invalid Bid - @' + author + ' is on the blacklist!');
+      utils.log('Invalid Bid - @' + author + ' is on the blacklist!');
       return;
     }
 
@@ -220,9 +220,18 @@ function checkPost(memo, amount, sender) {
             return;
         }
 
-        // All good - push to the array of valid bids for this round
-        console.log('Valid Bid - Amount: ' + amount + ', Title: ' + result.title);
-        outstanding_bids.push({ amount: amount, sender: sender, author: result.author, permlink: result.permlink });
+        // Check if there is already a bid for this post in the current round
+        var existing_bid = outstanding_bids.find(bid => bid.url == result.url);
+
+        if(existing_bid) {
+          // There is already a bid for this post in the current round
+          utils.log('Existing Bid Found - New Amount: ' + amount + ', Total Amount: ' + (existing_bid.amount + amount));
+          existing_bid.amount += amount;
+        } else {
+          // All good - push to the array of valid bids for this round
+          utils.log('Valid Bid - Amount: ' + amount + ', Title: ' + result.title);
+          outstanding_bids.push({ amount: amount, sender: sender, author: result.author, permlink: result.permlink, url: result.url });
+        }
     });
 }
 
@@ -230,23 +239,23 @@ function saveState() {
   // Save the state of the bot to disk
   fs.writeFile('state.json', JSON.stringify({ outstanding_bids: outstanding_bids, last_trans: last_trans, last_withdrawal: last_withdrawal }), function (err) {
     if (err)
-      console.log(err);
+      utils.log(err);
   });
 }
 
 function refund(sender, amount, currency, reason) {
   // Make sure refunds are enabled and the sender isn't on the no-refund list (for exchanges and things like that).
   if(!config.refunds_enabled || (config.no_refund && config.no_refund.indexOf(sender) >= 0)) {
-    console.log("Invalid bid - " + reason + ' NO REFUND');
+    utils.log("Invalid bid - " + reason + ' NO REFUND');
     return;
   }
 
   // Issue the refund.
   steem.broadcast.transfer(config.active_key, config.account, sender, utils.format(amount, 3) + ' ' + currency, 'Refund for invalid bid - ' + reason, function(err, response) {
     if(err)
-      console.log(err, response);
+      utils.log(err, response);
     else {
-      console.log('Refund of ' + amount + ' ' + currency + ' sent to @' + sender + ' for reason: ' + reason);
+      utils.log('Refund of ' + amount + ' ' + currency + ' sent to @' + sender + ' for reason: ' + reason);
     }
   });
 }
@@ -259,11 +268,11 @@ function claimRewards() {
   if (parseFloat(account.reward_steem_balance) > 0 || parseFloat(account.reward_sbd_balance) > 0 || parseFloat(account.reward_vesting_balance) > 0) {
     steem.broadcast.claimRewardBalance(config.posting_key, config.account, account.reward_steem_balance, account.reward_sbd_balance, account.reward_vesting_balance, function (err, result) {
       if (err) {
-        console.log(err);
+        utils.log(err);
       }
 
       if (result) {
-        console.log('$$$ Rewards Claim SBD:' + account.reward_sbd_balance + ', STEEM:' + account.reward_steem_balance + ', Vesting:' + account.reward_vesting_balance);
+        utils.log('$$$ Rewards Claim SBD:' + account.reward_sbd_balance + ', STEEM:' + account.reward_steem_balance + ', Vesting:' + account.reward_vesting_balance);
       }
     });
   }
@@ -291,9 +300,9 @@ function checkAutoWithdraw() {
       // Withdraw all available SBD to the specified account
       steem.broadcast.transfer(config.active_key, config.account, config.auto_withdrawal.to_account, account.sbd_balance, memo, function (err, response) {
         if (err)
-          console.log(err, response);
+          utils.log(err, response);
         else {
-          console.log('$$$ Auto withdrawal: ' + account.sbd_balance + ' sent to @' + config.auto_withdrawal.to_account);
+          utils.log('$$$ Auto withdrawal: ' + account.sbd_balance + ' sent to @' + config.auto_withdrawal.to_account);
         }
       });
     });
