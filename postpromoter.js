@@ -5,6 +5,7 @@ var utils = require('./utils');
 var account = null;
 var last_trans = 0;
 var outstanding_bids = [];
+var last_round = [];
 var config = null;
 var first_load = true;
 var isVoting = false;
@@ -13,6 +14,17 @@ var last_withdrawal = null;
 steem.api.setOptions({ url: 'https://api.steemit.com' });
 
 utils.log("*START*");
+
+// Load the settings from the config file
+config = JSON.parse(fs.readFileSync("config.json"));
+
+// If the API is enabled, start the web server
+if(config.api && config.api.enabled) {
+  var express = require('express');
+  var app = express();
+  app.get('/api/bids', (req, res) => res.json({ current_round: outstanding_bids, last_round: last_round }));
+  app.listen(config.api.port, () => utils.log('API running on port ' + config.api.port))
+}
 
 // Check if bot state has been saved to disk, in which case load it
 if (fs.existsSync('state.json')) {
@@ -23,6 +35,9 @@ if (fs.existsSync('state.json')) {
 
   if (state.outstanding_bids)
     outstanding_bids = state.outstanding_bids;
+
+  if (state.last_round)
+    last_round = state.last_round;
 
   if(state.last_withdrawal)
     last_withdrawal = state.last_withdrawal;
@@ -62,6 +77,9 @@ function startProcess() {
 
       // Make a copy of the list of outstanding bids and vote on them
       startVoting(outstanding_bids.slice().reverse());
+
+      // Save the last round of bids for use in API call
+      last_round = outstanding_bids.slice();
 
       // Reset the list of outstanding bids for the next round
       outstanding_bids = [];
@@ -167,12 +185,12 @@ function getTransactions() {
             } else if (amount > max_bid) {
               // Bid amount is too high
               refund(op[1].from, amount, currency, 'Max bid amount is ' + config.max_bid);
-            } else if(currency != 'SBD') {
-              // Sent STEEM instead of SBD
-              refund(op[1].from, amount, currency, 'Only SBD bids accepted!');
+            } else if(config.currencies_accepted && config.currencies_accepted.indexOf(currency) < 0) {
+              // Sent an unsupported currency
+              refund(op[1].from, amount, currency, 'Bids in ' + currency + ' are not accepted.');
             } else {
               // Bid amount is just right!
-              checkPost(op[1].memo, amount, op[1].from);
+              checkPost(op[1].memo, amount, currency, op[1].from);
             }
           }
 
@@ -183,7 +201,7 @@ function getTransactions() {
   });
 }
 
-function checkPost(memo, amount, sender) {
+function checkPost(memo, amount, currency, sender) {
     // Parse the author and permlink from the memo URL
     var permLink = memo.substr(memo.lastIndexOf('/') + 1);
     var author = memo.substring(memo.lastIndexOf('@') + 1, memo.lastIndexOf('/'));
@@ -200,7 +218,7 @@ function checkPost(memo, amount, sender) {
 
             // If comments are not allowed then we need to first check if the post is a comment
             if(!config.allow_comments && (result.parent_author != null && result.parent_author != '')) {
-              refund(sender, amount, 'SBD', 'Bids not allowed on comments.');
+              refund(sender, amount, currency, 'Bids not allowed on comments.');
               return;
             }
 
@@ -211,12 +229,12 @@ function checkPost(memo, amount, sender) {
 
             if (votes.length > 0 || (new Date() - created) >= (config.max_post_age * 60 * 60 * 1000)) {
                 // This post is already voted on by this bot or the post is too old to be voted on
-                refund(sender, amount, 'SBD', ((votes.length > 0) ? 'Already Voted' : 'Post older than max age'));
+                refund(sender, amount, currency, ((votes.length > 0) ? 'Already Voted' : 'Post older than max age'));
                 return;
             }
         } else {
             // Invalid memo
-            refund(sender, amount, 'SBD', 'Invalid Memo');
+            refund(sender, amount, currency, 'Invalid Memo');
             return;
         }
 
@@ -230,14 +248,21 @@ function checkPost(memo, amount, sender) {
         } else {
           // All good - push to the array of valid bids for this round
           utils.log('Valid Bid - Amount: ' + amount + ', Title: ' + result.title);
-          outstanding_bids.push({ amount: amount, sender: sender, author: result.author, permlink: result.permlink, url: result.url });
+          outstanding_bids.push({ amount: amount, currency: currency, sender: sender, author: result.author, permlink: result.permlink, url: result.url });
         }
     });
 }
 
 function saveState() {
+  var state = {
+    outstanding_bids: outstanding_bids,
+    last_round: last_round,
+    last_trans: last_trans,
+    last_withdrawal: last_withdrawal
+  };
+
   // Save the state of the bot to disk
-  fs.writeFile('state.json', JSON.stringify({ outstanding_bids: outstanding_bids, last_trans: last_trans, last_withdrawal: last_withdrawal }), function (err) {
+  fs.writeFile('state.json', JSON.stringify(state), function (err) {
     if (err)
       utils.log(err);
   });

@@ -10,6 +10,7 @@
   "batch_vote_weight": 100,
   "max_post_age": 144,
   "allow_comments": true,
+  "currencies_accepted": ["SBD", "STEEM"],
   "blacklist": ["account1", "account2"],
   "refunds_enabled": true,
   "no_refund": ["bittrex", "poloniex", "openledger", "blocktrades"],
@@ -19,5 +20,9 @@
     "to_account": "account_to_receive",
     "execute_time": 20,
     "memo": "#Today generated SBD - {balance} | Thank you."
+  },
+  "api": {
+    "enabled": true,
+    "port": 3000
   }
 }
