@@ -21,6 +21,7 @@ Set the following options in config.json:
   "batch_vote_weight": 100,
   "max_post_age": 144, // In hours, 144 hours = 6 days
   "allow_comments": true,
+  "currencies_accepted": ["SBD", "STEEM"], // Which currencies to accept
   "blacklist": ["account1", "account2"], // List of blacklisted accounts
   "refunds_enabled": true,
   "no_refund": ["bittrex", "poloniex", "openledger", "blocktrades"], // Don't refund transactions from these accounts!
@@ -30,6 +31,10 @@ Set the following options in config.json:
     "to_account": "account_to_receive", // account to receive
     "execute_time": 20, // Hour of the day to execute the withdrawal (0 - 23)
     "memo": "#Today generated SBD - {balance} | Thank you." // Transaction memo, start with # if you want it encrypted
+  },
+  "api": {  // This will expose an API endpoint for information about bids in each round
+    "enabled": true,
+    "port": 3000
   }
 }
 ```

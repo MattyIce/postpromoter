@@ -22,6 +22,13 @@ config = JSON.parse(fs.readFileSync("config.json"));
 if(config.api && config.api.enabled) {
   var express = require('express');
   var app = express();
+
+  app.use(function(req, res, next) {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+    next();
+  });
+  
   app.get('/api/bids', (req, res) => res.json({ current_round: outstanding_bids, last_round: last_round }));
   app.listen(config.api.port, () => utils.log('API running on port ' + config.api.port))
 }
