@@ -185,16 +185,16 @@ function getTransactions() {
 
             if(config.disabled_mode) {
               // Bot is disabled, refund all Bids
-              refund(op[1].from, amount, currency, 'Bot is disabled!');
+              refund(op[1].from, amount, currency, 'bot_disabled');
             } else if(amount < min_bid) {
               // Bid amount is too low
-              refund(op[1].from, amount, currency, 'Min bid amount is ' + config.min_bid);
+              refund(op[1].from, amount, currency, 'below_min_bid');
             } else if (amount > max_bid) {
               // Bid amount is too high
-              refund(op[1].from, amount, currency, 'Max bid amount is ' + config.max_bid);
+              refund(op[1].from, amount, currency, 'above_max_bid');
             } else if(config.currencies_accepted && config.currencies_accepted.indexOf(currency) < 0) {
               // Sent an unsupported currency
-              refund(op[1].from, amount, currency, 'Bids in ' + currency + ' are not accepted.');
+              refund(op[1].from, amount, currency, 'invalid_currency');
             } else {
               // Bid amount is just right!
               checkPost(op[1].memo, amount, currency, op[1].from);
@@ -225,7 +225,7 @@ function checkPost(memo, amount, currency, sender) {
 
             // If comments are not allowed then we need to first check if the post is a comment
             if(!config.allow_comments && (result.parent_author != null && result.parent_author != '')) {
-              refund(sender, amount, currency, 'Bids not allowed on comments.');
+              refund(sender, amount, currency, 'no_comments');
               return;
             }
 
@@ -236,12 +236,12 @@ function checkPost(memo, amount, currency, sender) {
 
             if (votes.length > 0 || (new Date() - created) >= (config.max_post_age * 60 * 60 * 1000)) {
                 // This post is already voted on by this bot or the post is too old to be voted on
-                refund(sender, amount, currency, ((votes.length > 0) ? 'Already Voted' : 'Post older than max age'));
+                refund(sender, amount, currency, ((votes.length > 0) ? 'already_voted' : 'max_age'));
                 return;
             }
         } else {
             // Invalid memo
-            refund(sender, amount, currency, 'Invalid Memo');
+            refund(sender, amount, currency, 'invalid_post_url');
             return;
         }
 
@@ -277,14 +277,25 @@ function saveState() {
 
 function refund(sender, amount, currency, reason) {
   // Make sure refunds are enabled and the sender isn't on the no-refund list (for exchanges and things like that).
-  if(!config.refunds_enabled || (config.no_refund && config.no_refund.indexOf(sender) >= 0)) {
+  if (!config.refunds_enabled || (config.no_refund && config.no_refund.indexOf(sender) >= 0)) {
     utils.log("Invalid bid - " + reason + ' NO REFUND');
     return;
   }
 
+  // Replace variables in the memo text
+  var memo = config.transfer_memos[reason];
+  memo = memo.replace(/{amount}/g, utils.format(amount, 3) + ' ' + currency);
+  memo = memo.replace(/{currency}/g, currency);
+  memo = memo.replace(/{min_bid}/g, config.min_bid);
+  memo = memo.replace(/{max_bid}/g, config.max_bid);
+
+  var days = Math.floor(config.max_post_age / 24);
+  var hours = (config.max_post_age % 24);
+  memo = memo.replace(/{max_age}/g, days + ' Day(s)' + ((hours > 0) ? ' ' + hours + ' Hour(s)' : ''));
+
   // Issue the refund.
-  steem.broadcast.transfer(config.active_key, config.account, sender, utils.format(amount, 3) + ' ' + currency, 'Refund for invalid bid - ' + reason, function(err, response) {
-    if(err)
+  steem.broadcast.transfer(config.active_key, config.account, sender, utils.format(amount, 3) + ' ' + currency, memo, function (err, response) {
+    if (err)
       utils.log(err, response);
     else {
       utils.log('Refund of ' + amount + ' ' + currency + ' sent to @' + sender + ' for reason: ' + reason);

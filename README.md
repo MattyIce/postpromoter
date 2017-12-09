@@ -39,6 +39,16 @@ Then set the following options in config.json:
   "api": {  // This will expose an API endpoint for information about bids in each round
     "enabled": true,
     "port": 3000
+  },
+  "transfer_memos": {	// Memos sent with transfer for bid refunds
+      "bot_disabled": "Refund for invalid bid: {amount} - The bot is currently disabled.",
+      "below_min_bid": "Refund for invalid bid: {amount} - Min bid amount is {min_bid}.",
+      "above_max_bid": "Refund for invalid bid: {amount} - Max bid amount is {max_bid}.",
+      "invalid_currency": "Refund for invalid bid: {amount} - Bids in {currency} are not accepted.",
+      "no_comments": "Refund for invalid bid: {amount} - Bids not allowed on comments.",
+      "already_voted": "Refund for invalid bid: {amount} - Bot already voted on this post.",
+      "max_age": "Refund for invalid bid: {amount} - Posts cannot be older than {max_age}.",
+      "invalid_post_url": "Refund for invalid bid: {amount} - Invalid post URL in memo."
   }
 }
 ```
