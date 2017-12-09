@@ -19,7 +19,7 @@
     "active": true,
     "to_account": "account_to_receive",
     "execute_time": 20,
-    "memo": "#Today generated SBD - {balance} | Thank you."
+    "memo": "# Daily Earnings - {balance} | Thank you!"
   },
   "api": {
     "enabled": true,

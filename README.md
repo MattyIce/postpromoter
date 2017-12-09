@@ -6,8 +6,12 @@ $ git clone https://github.com/MattyIce/postpromoter.git
 ```
 
 ## Configuration
+First rename config-example.json to config.json:
+```
+$ mv config-example.json config.json
+```
 
-Set the following options in config.json:
+Then set the following options in config.json:
 ```
 {
   "disabled_mode": false, // Set this to true to refund all funds sent to the bot
@@ -27,7 +31,7 @@ Set the following options in config.json:
   "no_refund": ["bittrex", "poloniex", "openledger", "blocktrades"], // Don't refund transactions from these accounts!
   "promotion_content": "You got a {weight}% upvote from @{botname} courtesy of @{sender}!", // Change this to whatever you want the bot to post as a comment when it votes, or leave it out or blank for no comment
   "auto_withdrawal": {
-    "active": true, // Activate the auto withdrawal function
+    "active": true, // Activate the auto withdrawal function (will withdraw all accepted currencies)
     "to_account": "account_to_receive", // account to receive
     "execute_time": 20, // Hour of the day to execute the withdrawal (0 - 23)
     "memo": "#Today generated SBD - {balance} | Thank you." // Transaction memo, start with # if you want it encrypted

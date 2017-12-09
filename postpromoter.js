@@ -315,8 +315,11 @@ function checkAutoWithdraw() {
   if (!config.auto_withdrawal.active)
     return;
 
+  var has_sbd = config.currencies_accepted.indexOf('SBD') >= 0 && parseFloat(account.sbd_balance) > 0;
+  var has_steem = config.currencies_accepted.indexOf('STEEM') >= 0 && parseFloat(account.balance) > 0;
+
   // If it's past the withdrawal time and we haven't made a withdrawal today and there is a positive SBD balance, then process the withdrawal
-  if (new Date(new Date().toDateString()) > new Date(last_withdrawal) && new Date().getHours() >= config.auto_withdrawal.execute_time && parseFloat(account.sbd_balance) > 0) {
+  if (new Date(new Date().toDateString()) > new Date(last_withdrawal) && new Date().getHours() >= config.auto_withdrawal.execute_time && (has_sbd || has_steem)) {
     // Save the date of the last withdrawal
     last_withdrawal = new Date().toDateString();
 
@@ -329,14 +332,27 @@ function checkAutoWithdraw() {
       if(memo.startsWith('#'))
         memo = steem.memo.encode(config.memo_key, to_account.memo_key, memo);
 
-      // Withdraw all available SBD to the specified account
-      steem.broadcast.transfer(config.active_key, config.account, config.auto_withdrawal.to_account, account.sbd_balance, memo, function (err, response) {
-        if (err)
-          utils.log(err, response);
-        else {
-          utils.log('$$$ Auto withdrawal: ' + account.sbd_balance + ' sent to @' + config.auto_withdrawal.to_account);
-        }
-      });
+      if (has_sbd) {
+        // Withdraw all available SBD to the specified account
+        steem.broadcast.transfer(config.active_key, config.account, config.auto_withdrawal.to_account, account.sbd_balance, memo, function (err, response) {
+          if (err)
+            utils.log(err, response);
+          else {
+            utils.log('$$$ Auto withdrawal: ' + account.sbd_balance + ' sent to @' + config.auto_withdrawal.to_account);
+          }
+        });
+      }
+
+      if (has_steem) {
+        // Withdraw all available STEEM to the specified account
+        steem.broadcast.transfer(config.active_key, config.account, config.auto_withdrawal.to_account, account.balance, memo, function (err, response) {
+          if (err)
+            utils.log(err, response);
+          else {
+            utils.log('$$$ Auto withdrawal: ' + account.balance + ' sent to @' + config.auto_withdrawal.to_account);
+          }
+        });
+      }
     });
   }
 }
