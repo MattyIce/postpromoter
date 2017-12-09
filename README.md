@@ -32,7 +32,16 @@ Then set the following options in config.json:
   "promotion_content": "You got a {weight}% upvote from @{botname} courtesy of @{sender}!", // Change this to whatever you want the bot to post as a comment when it votes, or leave it out or blank for no comment
   "auto_withdrawal": {
     "active": true, // Activate the auto withdrawal function (will withdraw all accepted currencies)
-    "to_account": "account_to_receive", // account to receive
+    "accounts": [	// List of accounts to receive daily withdrawals and the amount to send to each
+      {
+        "name": "account1",
+        "stake": 8000
+      },
+      {
+        "name": "account2",
+        "stake": 2000
+      }
+    ],
     "execute_time": 20, // Hour of the day to execute the withdrawal (0 - 23)
     "memo": "#Today generated SBD - {balance} | Thank you." // Transaction memo, start with # if you want it encrypted
   },

@@ -334,36 +334,47 @@ function checkAutoWithdraw() {
     // Save the date of the last withdrawal
     last_withdrawal = new Date().toDateString();
 
-    // Load account details of the account we are sending the withdrawal to (this is needed for encrypted memos)
-    steem.api.getAccounts([config.auto_withdrawal.to_account], function(err, result) {
-      var to_account = result[0];
-      var memo = config.auto_withdrawal.memo.replace(/\{balance\}/g, account.sbd_balance);
+    var total_stake = config.auto_withdrawal.accounts.reduce(function (total, info) { return total + info.stake; }, 0);
 
-      // Encrypt memo
-      if(memo.startsWith('#'))
-        memo = steem.memo.encode(config.memo_key, to_account.memo_key, memo);
+    config.auto_withdrawal.accounts.forEach(function (withdrawal_account) {
+      // Load account details of the account we are sending the withdrawal to (this is needed for encrypted memos)
+      steem.api.getAccounts([withdrawal_account.name], function(err, result) {
+        var to_account = result[0];
 
-      if (has_sbd) {
-        // Withdraw all available SBD to the specified account
-        steem.broadcast.transfer(config.active_key, config.account, config.auto_withdrawal.to_account, account.sbd_balance, memo, function (err, response) {
-          if (err)
-            utils.log(err, response);
-          else {
-            utils.log('$$$ Auto withdrawal: ' + account.sbd_balance + ' sent to @' + config.auto_withdrawal.to_account);
-          }
-        });
-      }
+        if (has_sbd) {
+          // Calculate this accounts percentage of the total earnings
+          var amount = parseFloat(account.sbd_balance) * (withdrawal_account.stake / total_stake);
 
-      if (has_steem) {
-        // Withdraw all available STEEM to the specified account
-        steem.broadcast.transfer(config.active_key, config.account, config.auto_withdrawal.to_account, account.balance, memo, function (err, response) {
-          if (err)
-            utils.log(err, response);
-          else {
-            utils.log('$$$ Auto withdrawal: ' + account.balance + ' sent to @' + config.auto_withdrawal.to_account);
-          }
-        });
-      }
+          // Withdraw all available SBD to the specified account
+          sendWithdrawal(to_account, amount, 'SBD')
+        }
+
+        if (has_steem) {
+          // Calculate this accounts percentage of the total earnings
+          var amount = parseFloat(account.balance) * (withdrawal_account.stake / total_stake);
+
+          // Withdraw all available STEEM to the specified account
+          sendWithdrawal(to_account, amount, 'STEEM')
+        }
+      });
     });
   }
+}
+
+function sendWithdrawal(to_account, amount, currency) {
+  var formatted_amount = utils.format(amount, 3) + ' ' + currency;
+  var memo = config.auto_withdrawal.memo.replace(/\{balance\}/g, formatted_amount);
+
+  // Encrypt memo
+  if (memo.startsWith('#'))
+    memo = steem.memo.encode(config.memo_key, to_account.memo_key, memo);
+
+  // Send the withdrawal amount to the specified account
+  steem.broadcast.transfer(config.active_key, config.account, to_account.name, formatted_amount, memo, function (err, response) {
+    if (err)
+      utils.log(err, response);
+    else {
+      utils.log('$$$ Auto withdrawal: ' + formatted_amount + ' sent to @' + to_account.name);
+    }
+  });
 }
