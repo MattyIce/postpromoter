@@ -67,7 +67,8 @@ function startProcess() {
     claimRewards();
 
     // Check if it is time to withdraw funds.
-    checkAutoWithdraw();
+    if (config.auto_withdrawal.frequency == 'daily')
+      checkAutoWithdraw();
   });
 
   if (account && !isVoting) {
@@ -90,6 +91,10 @@ function startProcess() {
 
       // Reset the list of outstanding bids for the next round
       outstanding_bids = [];
+
+      // Send out earnings if frequency is set to every round
+      if (config.auto_withdrawal.frequency == 'round_end')
+        processWithdrawals();
     }
 
     // Save the state of the bot to disk.
@@ -129,7 +134,7 @@ function vote(bids) {
         var content = config.promotion_content.replace(/\{weight\}/g, utils.format(bid.weight / 100)).replace(/\{botname\}/g, config.account).replace(/\{sender\}/g, bid.sender);
 
         // Broadcast the comment
-        steem.broadcast.comment(config.posting_key, bid.author, bid.permlink, account.name, permlink, permlink, content, '{"app":"postpromoter/1.2.0"}', function (err, result) {
+        steem.broadcast.comment(config.posting_key, bid.author, bid.permlink, account.name, permlink, permlink, content, '{"app":"postpromoter/1.5.0"}', function (err, result) {
           if (err)
             utils.log(err, result);
         });
@@ -326,11 +331,18 @@ function checkAutoWithdraw() {
   if (!config.auto_withdrawal.active)
     return;
 
+  // If it's past the withdrawal time and we haven't made a withdrawal today, then process the withdrawal
+  if (new Date(new Date().toDateString()) > new Date(last_withdrawal) && new Date().getHours() >= config.auto_withdrawal.execute_time) {
+    processWithdrawals();
+  }
+}
+
+function processWithdrawals() {
   var has_sbd = config.currencies_accepted.indexOf('SBD') >= 0 && parseFloat(account.sbd_balance) > 0;
   var has_steem = config.currencies_accepted.indexOf('STEEM') >= 0 && parseFloat(account.balance) > 0;
 
-  // If it's past the withdrawal time and we haven't made a withdrawal today and there is a positive SBD balance, then process the withdrawal
-  if (new Date(new Date().toDateString()) > new Date(last_withdrawal) && new Date().getHours() >= config.auto_withdrawal.execute_time && (has_sbd || has_steem)) {
+  if (has_sbd || has_steem) {
+
     // Save the date of the last withdrawal
     last_withdrawal = new Date().toDateString();
 
@@ -338,7 +350,7 @@ function checkAutoWithdraw() {
 
     config.auto_withdrawal.accounts.forEach(function (withdrawal_account) {
       // Load account details of the account we are sending the withdrawal to (this is needed for encrypted memos)
-      steem.api.getAccounts([withdrawal_account.name], function(err, result) {
+      steem.api.getAccounts([withdrawal_account.name], function (err, result) {
         var to_account = result[0];
 
         if (has_sbd) {
