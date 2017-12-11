@@ -27,6 +27,7 @@
         "stake": 2000
       }
     ],
+    "frequency": "daily",
     "execute_time": 20,
     "memo": "# Daily Earnings - {balance} | Thank you!"
   },

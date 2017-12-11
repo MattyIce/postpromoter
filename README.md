@@ -42,6 +42,7 @@ Then set the following options in config.json:
         "stake": 2000
       }
     ],
+	"frequency": "daily", // This can be "daily" for withdrawals once per day or "round_end" for withdrawals after every bidding round
     "execute_time": 20, // Hour of the day to execute the withdrawal (0 - 23)
     "memo": "#Today generated SBD - {balance} | Thank you." // Transaction memo, start with # if you want it encrypted
   },
