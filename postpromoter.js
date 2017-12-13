@@ -134,8 +134,10 @@ function vote(bids) {
 
 function sendVote(bid, retries) {
   // Don't retry more than once if the vote fails.
-  if (retries > 1)
+  if (retries > 1) {
+    utils.log('============= Vote transaction failed two times for: ' + bid.permlink + ' ===============');
     return;
+  }
 
   utils.log('Bid Weight: ' + bid.weight);
   steem.broadcast.vote(config.posting_key, account.name, bid.author, bid.permlink, bid.weight, function (err, result) {
@@ -379,7 +381,7 @@ function processWithdrawals() {
 
         if (has_sbd) {
           // Calculate this accounts percentage of the total earnings
-          var amount = parseFloat(account.sbd_balance) * (withdrawal_account.stake / total_stake);
+          var amount = parseFloat(account.sbd_balance) * (withdrawal_account.stake / total_stake) - 0.001;
 
           // Withdraw all available SBD to the specified account
           sendWithdrawal(to_account, amount, 'SBD')
