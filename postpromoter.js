@@ -28,7 +28,7 @@ if(config.api && config.api.enabled) {
     res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
     next();
   });
-  
+
   app.get('/api/bids', (req, res) => res.json({ current_round: outstanding_bids, last_round: last_round }));
   app.listen(config.api.port, () => utils.log('API running on port ' + config.api.port))
 }
@@ -321,6 +321,19 @@ function claimRewards() {
 
       if (result) {
         utils.log('$$$ Rewards Claim SBD:' + account.reward_sbd_balance + ', STEEM:' + account.reward_steem_balance + ', Vesting:' + account.reward_vesting_balance);
+
+        // If there are liquid post rewards, withdraw them to the specified account
+        if(parseFloat(account.reward_sbd_balance) > 0 && config.post_rewards_withdrawal_account && config.post_rewards_withdrawal_account != '') {
+
+          // Send liquid post rewards to the specified account
+          steem.broadcast.transfer(config.active_key, config.account, config.post_rewards_withdrawal_account, account.reward_sbd_balance, 'Liquid Post Rewards Withdrawal', function (err, response) {
+            if (err)
+              utils.log(err, response);
+            else {
+              utils.log('$$$ Auto withdrawal - liquid post rewards: ' + account.reward_sbd_balance + ' sent to @' + config.post_rewards_withdrawal_account);
+            }
+          });
+        }
       }
     });
   }
@@ -378,7 +391,7 @@ function sendWithdrawal(to_account, amount, currency) {
   var memo = config.auto_withdrawal.memo.replace(/\{balance\}/g, formatted_amount);
 
   // Encrypt memo
-  if (memo.startsWith('#'))
+  if (memo.startsWith('#') && config.memo_key && config.memo_key != '')
     memo = steem.memo.encode(config.memo_key, to_account.memo_key, memo);
 
   // Send the withdrawal amount to the specified account

@@ -20,6 +20,7 @@ Then set the following options in config.json:
   "posting_key": "your_private_posting_key",
   "active_key": "your_private_active_key",
   "auto_claim_rewards" : true, // Set to false if you dont want to claim rewards automatical
+  "post_rewards_withdrawal_account": "account_name", // Automatically withdraw any liquid post rewards to the specified account
   "min_bid": 0.1,
   "max_bid": 999,
   "batch_vote_weight": 100,
