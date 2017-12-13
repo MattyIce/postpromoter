@@ -119,9 +119,26 @@ function startVoting(bids) {
 
 function vote(bids) {
   // Get the first bid in the list
-  var bid = bids.pop();
+  sendVote(bids.pop(), 0);
+
+  // If there are more bids, vote on the next one after 20 seconds
+  if(bids.length > 0) {
+    setTimeout(function() { vote(bids); }, 30000);
+  } else {
+    utils.log('=======================================================');
+    utils.log('Voting Complete!');
+    utils.log('=======================================================');
+    isVoting = false;
+  }
+}
+
+function sendVote(bid, retries) {
+  // Don't retry more than once if the vote fails.
+  if (retries > 1)
+    return;
+
   utils.log('Bid Weight: ' + bid.weight);
-  steem.broadcast.vote(config.posting_key, account.name, bid.author, bid.permlink, bid.weight, function(err, result) {
+  steem.broadcast.vote(config.posting_key, account.name, bid.author, bid.permlink, bid.weight, function (err, result) {
     if (!err && result) {
       utils.log(utils.format(bid.weight / 100) + '% vote cast for: @' + bid.author + '/' + bid.permlink);
 
@@ -134,24 +151,18 @@ function vote(bids) {
         var content = config.promotion_content.replace(/\{weight\}/g, utils.format(bid.weight / 100)).replace(/\{botname\}/g, config.account).replace(/\{sender\}/g, bid.sender);
 
         // Broadcast the comment
-        steem.broadcast.comment(config.posting_key, bid.author, bid.permlink, account.name, permlink, permlink, content, '{"app":"postpromoter/1.5.0"}', function (err, result) {
+        steem.broadcast.comment(config.posting_key, bid.author, bid.permlink, account.name, permlink, permlink, content, '{"app":"postpromoter/1.6.0"}', function (err, result) {
           if (err)
             utils.log(err, result);
         });
       }
-    } else
+    } else {
       utils.log(err, result);
-  });
 
-  // If there are more bids, vote on the next one after 20 seconds
-  if(bids.length > 0) {
-    setTimeout(function() { vote(bids); }, 30000);
-  } else {
-    utils.log('=======================================================');
-    utils.log('Voting Complete!');
-    utils.log('=======================================================');
-    isVoting = false;
-  }
+      // Try again on error
+      sendVote(bid, retries + 1);
+    }
+  });
 }
 
 function getTransactions() {
