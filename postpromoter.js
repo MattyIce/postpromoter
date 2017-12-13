@@ -333,7 +333,12 @@ function claimRewards() {
       }
 
       if (result) {
-        utils.log('$$$ Rewards Claim SBD:' + account.reward_sbd_balance + ', STEEM:' + account.reward_steem_balance + ', Vesting:' + account.reward_vesting_balance);
+        var rewards_message = "$$$ ==> Rewards Claim";
+        if (account.reward_sbd_balance > 0) { rewards_message = rewards_message + ' SBD: ' + account.reward_sbd_balance; }
+        if (account.reward_steem_balance > 0) { rewards_message = rewards_message + ' STEEM: ' + account.reward_steem_balance; }
+        if (account.reward_vesting_balance > 0) { rewards_message = rewards_message + ' VESTS: ' + account.reward_vesting_balance; }
+
+        utils.log(rewards_message);
 
         // If there are liquid post rewards, withdraw them to the specified account
         if(parseFloat(account.reward_sbd_balance) > 0 && config.post_rewards_withdrawal_account && config.post_rewards_withdrawal_account != '') {
