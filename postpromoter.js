@@ -10,6 +10,8 @@ var config = null;
 var first_load = true;
 var isVoting = false;
 var last_withdrawal = null;
+var steem_price = 1;  // This will get overridden with actual prices if a price_feed_url is specified in settings
+var sbd_price = 1;    // This will get overridden with actual prices if a price_feed_url is specified in settings
 
 steem.api.setOptions({ url: 'https://api.steemit.com' });
 
@@ -54,6 +56,9 @@ if (fs.existsSync('state.json')) {
 
 // Schedule to run every 10 seconds
 setInterval(startProcess, 10000);
+
+// Load updated STEEM and SBD prices every minute
+setInterval(loadPrices, 60000);
 
 function startProcess() {
   // Load the settings from the config file each time so we can pick up any changes
@@ -104,14 +109,17 @@ function startProcess() {
 
 function startVoting(bids) {
   // Sum the amounts of all of the bids
-  var total = bids.reduce(function(total, bid) { return total + bid.amount; }, 0);
+  var total = bids.reduce(function(total, bid) {
+    return total + getUsdValue(bid);
+  }, 0);
+
   utils.log('=======================================================');
   utils.log('Bidding Round End! Starting to vote! Total bids: $' + total);
   utils.log('=======================================================');
 
   for(var i = 0; i < bids.length; i++) {
     // Calculate the vote weight to be used for each bid based on the amount bid as a percentage of the total bids
-    bids[i].weight = Math.round(config.batch_vote_weight * 100 * (bids[i].amount / total));
+    bids[i].weight = Math.round(config.batch_vote_weight * 100 * (getUsdValue(bids[i]) / total));
   }
 
   vote(bids);
@@ -421,3 +429,22 @@ function sendWithdrawal(to_account, amount, currency) {
     }
   });
 }
+
+function loadPrices() {
+  if(!config.price_feed_url || config.price_feed_url == '')
+    return;
+
+  // Require the "request" library for making HTTP requests
+  var request = require("request");
+
+  // Load the price feed data
+  request.get(config.price_feed_url, function (e, r, data) {
+    var prices = JSON.parse(data);
+    steem_price = prices.steem_price;
+    sbd_price = prices.sbd_price;
+
+    utils.log('Prices Loaded - STEEM: ' + utils.format(steem_price) + ', SBD: ' + utils.format(sbd_price));
+  });
+}
+
+function getUsdValue(bid) { return bid.amount * ((bid.currency == 'SBD') ? sbd_price : steem_price); }
