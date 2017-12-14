@@ -81,7 +81,7 @@ function startProcess() {
 
     // Load the current voting power of the account
     var vp = utils.getVotingPower(account);
-    
+
     if(config.detailed_logging)
       utils.log('Voting Power: ' + utils.format(vp / 100) + '% | Time until next round: ' + utils.toTimer(utils.timeTilFullPower(vp)));
 
@@ -144,12 +144,6 @@ function vote(bids) {
 }
 
 function sendVote(bid, retries) {
-  // Don't retry more than once if the vote fails.
-  if (retries > 1) {
-    utils.log('============= Vote transaction failed two times for: ' + bid.permlink + ' ===============');
-    return;
-  }
-
   utils.log('Bid Weight: ' + bid.weight);
   steem.broadcast.vote(config.posting_key, account.name, bid.author, bid.permlink, bid.weight, function (err, result) {
     if (!err && result) {
@@ -172,8 +166,12 @@ function sendVote(bid, retries) {
     } else {
       utils.log(err, result);
 
-      // Try again on error
-      sendVote(bid, retries + 1);
+      // Try again one time on error
+      if(retries < 1)
+        sendVote(bid, retries + 1);
+      else {
+        utils.log('============= Vote transaction failed two times for: ' + bid.permlink + ' ===============');
+      }
     }
   });
 }
@@ -401,7 +399,7 @@ function processWithdrawals() {
           var amount = parseFloat(account.sbd_balance) * (withdrawal_account.stake / total_stake) - 0.001;
 
           // Withdraw all available SBD to the specified account
-          sendWithdrawal(to_account, amount, 'SBD')
+          sendWithdrawal(to_account, amount, 'SBD', 0)
         }
 
         if (has_steem) {
@@ -409,14 +407,14 @@ function processWithdrawals() {
           var amount = parseFloat(account.balance) * (withdrawal_account.stake / total_stake);
 
           // Withdraw all available STEEM to the specified account
-          sendWithdrawal(to_account, amount, 'STEEM')
+          sendWithdrawal(to_account, amount, 'STEEM', 0)
         }
       });
     });
   }
 }
 
-function sendWithdrawal(to_account, amount, currency) {
+function sendWithdrawal(to_account, amount, currency, retries) {
   var formatted_amount = utils.format(amount, 3).replace(/,/g, '') + ' ' + currency;
   var memo = config.auto_withdrawal.memo.replace(/\{balance\}/g, formatted_amount);
 
@@ -426,9 +424,16 @@ function sendWithdrawal(to_account, amount, currency) {
 
   // Send the withdrawal amount to the specified account
   steem.broadcast.transfer(config.active_key, config.account, to_account.name, formatted_amount, memo, function (err, response) {
-    if (err)
+    if (err) {
       utils.log(err, response);
-    else {
+
+      // Try again once if there is an error
+      if(retries < 1)
+        sendWithdrawal(to_account, amount, currency, retries + 1);
+      else {
+        utils.log('============= Withdrawal failed two times to: ' + to_account + ' for: ' + formatted_amount + ' ===============');
+      }
+    } else {
       utils.log('$$$ Auto withdrawal: ' + formatted_amount + ' sent to @' + to_account.name);
     }
   });
