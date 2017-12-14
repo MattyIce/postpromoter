@@ -81,6 +81,9 @@ function startProcess() {
 
     // Load the current voting power of the account
     var vp = utils.getVotingPower(account);
+    
+    if(config.detailed_logging)
+      utils.log('Voting Power: ' + utils.format(vp / 100) + '% | Time until next round: ' + utils.toTimer(utils.timeTilFullPower(vp)));
 
     // We are at 100% voting power - time to vote!
     if (vp >= 10000 && outstanding_bids.length > 0) {
@@ -341,7 +344,7 @@ function claimRewards() {
       }
 
       if (result) {
-        
+
         var rewards_message = "$$$ ==> Rewards Claim";
         if (parseFloat(account.reward_sbd_balance) > 0) { rewards_message = rewards_message + ' SBD: ' + parseFloat(account.reward_sbd_balance); }
         if (parseFloat(account.reward_steem_balance) > 0) { rewards_message = rewards_message + ' STEEM: ' + parseFloat(account.reward_steem_balance); }
@@ -444,7 +447,8 @@ function loadPrices() {
     steem_price = prices.steem_price;
     sbd_price = prices.sbd_price;
 
-    utils.log('Prices Loaded - STEEM: ' + utils.format(steem_price) + ', SBD: ' + utils.format(sbd_price));
+    if(config.detailed_logging)
+      utils.log('Prices Loaded - STEEM: ' + utils.format(steem_price) + ', SBD: ' + utils.format(sbd_price));
   });
 }
 

@@ -15,6 +15,7 @@ Then set the following options in config.json:
 ```
 {
   "disabled_mode": false, // Set this to true to refund all funds sent to the bot
+  "detailed_logging": false, // Whether or not detailed logging is enabled
   "account": "yourbotaccount",
   "memo_key": "your_private_memo_key"
   "posting_key": "your_private_posting_key",
@@ -27,6 +28,7 @@ Then set the following options in config.json:
   "max_post_age": 144, // In hours, 144 hours = 6 days
   "allow_comments": true,
   "currencies_accepted": ["SBD", "STEEM"], // Which currencies to accept
+  "price_feed_url": "https://postpromoter.com/api/prices", // URL of SBD and STEEM price feed to use for valuing bids in multiple currencies
   "blacklist": ["account1", "account2"], // List of blacklisted accounts
   "refunds_enabled": true,
   "no_refund": ["bittrex", "poloniex", "openledger", "blocktrades"], // Don't refund transactions from these accounts!

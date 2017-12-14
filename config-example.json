@@ -1,5 +1,6 @@
 {
   "disabled_mode": false,
+  "detailed_logging": false,
   "account": "your_bot_account_name",
   "memo_key": "your_private_memo_key",
   "posting_key": "your_private_posting_key",

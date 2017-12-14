@@ -2,7 +2,7 @@ const steem = require('steem');
 
 var STEEMIT_100_PERCENT = 10000;
 var STEEMIT_VOTE_REGENERATION_SECONDS = (5 * 60 * 60 * 24);
-var HOURS = 60 * 60 * 1000;
+var HOURS = 60 * 60;
 
  var steemPrice;
  var rewardBalance;
@@ -79,8 +79,7 @@ var HOURS = 60 * 60 * 1000;
      }
  }
 
-function timeTilFullPower(account){
-     var cur_power = getVotingPower(account);
+function timeTilFullPower(cur_power){
      return (STEEMIT_100_PERCENT - cur_power) * STEEMIT_VOTE_REGENERATION_SECONDS / STEEMIT_100_PERCENT;
  }
 
@@ -105,6 +104,21 @@ function format(n, c, d, t) {
    return s + (j ? i.substr(0, j) + t : "") + i.substr(j).replace(/(\d{3})(?=\d)/g, "$1" + t) + (c ? d + Math.abs(n - i).toFixed(c).slice(2) : "");
  }
 
+ function toTimer(ts) {
+   var h = Math.floor(ts / HOURS);
+   var m = Math.floor((ts % HOURS) / 60);
+   var s = Math.floor((ts % 60));
+   return padLeft(h, 2) + ':' + padLeft(m, 2) + ':' + padLeft(s, 2);
+ }
+
+ function padLeft(v, d) {
+   var l = (v + '').length;
+   if (l >= d) return v + '';
+   for(var i = l; i < d; i++)
+     v = '0' + v;
+   return v;
+ }
+
  function log(msg) { console.log(new Date().toString() + ' - ' + msg); }
 
  module.exports = {
@@ -114,5 +128,6 @@ function format(n, c, d, t) {
    getVestingShares: getVestingShares,
    getCurrency: getCurrency,
    format: format,
+   toTimer: toTimer,
    log: log
  }
