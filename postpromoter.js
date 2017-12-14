@@ -333,10 +333,11 @@ function claimRewards() {
       }
 
       if (result) {
+        
         var rewards_message = "$$$ ==> Rewards Claim";
-        if (account.reward_sbd_balance > 0) { rewards_message = rewards_message + ' SBD: ' + account.reward_sbd_balance; }
-        if (account.reward_steem_balance > 0) { rewards_message = rewards_message + ' STEEM: ' + account.reward_steem_balance; }
-        if (account.reward_vesting_balance > 0) { rewards_message = rewards_message + ' VESTS: ' + account.reward_vesting_balance; }
+        if (parseFloat(account.reward_sbd_balance) > 0) { rewards_message = rewards_message + ' SBD: ' + parseFloat(account.reward_sbd_balance); }
+        if (parseFloat(account.reward_steem_balance) > 0) { rewards_message = rewards_message + ' STEEM: ' + parseFloat(account.reward_steem_balance); }
+        if (parseFloat(account.reward_vesting_balance) > 0) { rewards_message = rewards_message + ' VESTS: ' + parseFloat(account.reward_vesting_balance); }
 
         utils.log(rewards_message);
 
@@ -405,7 +406,7 @@ function processWithdrawals() {
 }
 
 function sendWithdrawal(to_account, amount, currency) {
-  var formatted_amount = utils.format(amount, 3) + ' ' + currency;
+  var formatted_amount = utils.format(amount, 3).replace(/,/g, '') + ' ' + currency;
   var memo = config.auto_withdrawal.memo.replace(/\{balance\}/g, formatted_amount);
 
   // Encrypt memo
