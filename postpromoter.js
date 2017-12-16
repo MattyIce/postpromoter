@@ -278,7 +278,14 @@ function checkPost(memo, amount, currency, sender) {
         if(existing_bid) {
           // There is already a bid for this post in the current round
           utils.log('Existing Bid Found - New Amount: ' + amount + ', Total Amount: ' + (existing_bid.amount + amount));
-          existing_bid.amount += amount;
+
+          if(existing_bid.currency == currency) {
+            existing_bid.amount += amount;
+          } else if(existing_bid.currency == 'STEEM') {
+            existing_bid.amount += amount * sbd_price / steem_price;
+          } else if(existing_bid.currency == 'SBD') {
+            existing_bid.amount += amount * steem_price / sbd_price;
+          }
         } else {
           // All good - push to the array of valid bids for this round
           utils.log('Valid Bid - Amount: ' + amount + ', Title: ' + result.title);
