@@ -87,7 +87,7 @@ function startProcess() {
     if (vp >= 10000 && outstanding_bids.length > 0) {
 
       // Don't process any bids while we are voting due to race condition (they will be processed when voting is done).
-      isVoting = true;
+      isVoting = first_load = true;
 
       // Make a copy of the list of outstanding bids and vote on them
       startVoting(outstanding_bids.slice().reverse());
