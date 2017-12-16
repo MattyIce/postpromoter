@@ -77,8 +77,6 @@ function startProcess() {
   });
 
   if (account && !isVoting) {
-    getTransactions();
-
     // Load the current voting power of the account
     var vp = utils.getVotingPower(account);
 
@@ -103,6 +101,8 @@ function startProcess() {
       // Send out earnings if frequency is set to every round
       if (config.auto_withdrawal.frequency == 'round_end')
         processWithdrawals();
+    } else {
+      getTransactions();
     }
 
     // Save the state of the bot to disk.
