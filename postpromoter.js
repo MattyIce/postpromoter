@@ -136,10 +136,12 @@ function vote(bids) {
   if(bids.length > 0) {
     setTimeout(function() { vote(bids); }, 30000);
   } else {
-    utils.log('=======================================================');
-    utils.log('Voting Complete!');
-    utils.log('=======================================================');
-    isVoting = false;
+    setTimeout(function() {
+      utils.log('=======================================================');
+      utils.log('Voting Complete!');
+      utils.log('=======================================================');
+      isVoting = false;
+    }, 30000);
   }
 }
 
@@ -213,15 +215,15 @@ function getTransactions() {
             if(config.disabled_mode) {
               // Bot is disabled, refund all Bids
               refund(op[1].from, amount, currency, 'bot_disabled');
+            } else if(config.currencies_accepted && config.currencies_accepted.indexOf(currency) < 0) {
+              // Sent an unsupported currency
+              refund(op[1].from, amount, currency, 'invalid_currency');
             } else if(amount < min_bid) {
               // Bid amount is too low
               refund(op[1].from, amount, currency, 'below_min_bid');
             } else if (amount > max_bid) {
               // Bid amount is too high
               refund(op[1].from, amount, currency, 'above_max_bid');
-            } else if(config.currencies_accepted && config.currencies_accepted.indexOf(currency) < 0) {
-              // Sent an unsupported currency
-              refund(op[1].from, amount, currency, 'invalid_currency');
             } else {
               // Bid amount is just right!
               checkPost(op[1].memo, amount, currency, op[1].from);
