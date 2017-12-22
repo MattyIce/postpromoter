@@ -126,6 +126,7 @@ function startVoting(bids) {
   }
 
   vote(bids);
+  comment(bids.slice());
 }
 
 function vote(bids) {
@@ -134,15 +135,22 @@ function vote(bids) {
 
   // If there are more bids, vote on the next one after 20 seconds
   if(bids.length > 0) {
-    setTimeout(function() { vote(bids); }, 30000);
+    setTimeout(function() { vote(bids); }, 5000);
   } else {
     setTimeout(function() {
       utils.log('=======================================================');
       utils.log('Voting Complete!');
       utils.log('=======================================================');
       isVoting = false;
-    }, 30000);
+    }, 5000);
   }
+}
+
+function comment(bids) {
+  sendComment(bids.pop());
+
+  if(bids.length > 0)
+    setTimeout(function () { comment(bids); }, 30000);
 }
 
 function sendVote(bid, retries) {
@@ -150,21 +158,6 @@ function sendVote(bid, retries) {
   steem.broadcast.vote(config.posting_key, account.name, bid.author, bid.permlink, bid.weight, function (err, result) {
     if (!err && result) {
       utils.log(utils.format(bid.weight / 100) + '% vote cast for: @' + bid.author + '/' + bid.permlink);
-
-      // If promotion content is specified in the config then use it to comment on the upvoted post
-      if (config.promotion_content && config.promotion_content != '') {
-        // Generate the comment permlink via steemit standard convention
-        var permlink = 're-' + bid.author.replace(/\./g, '') + '-' + bid.permlink + '-' + new Date().toISOString().replace(/-|:|\./g, '').toLowerCase();
-
-        // Replace variables in the promotion content
-        var content = config.promotion_content.replace(/\{weight\}/g, utils.format(bid.weight / 100)).replace(/\{botname\}/g, config.account).replace(/\{sender\}/g, bid.sender);
-
-        // Broadcast the comment
-        steem.broadcast.comment(config.posting_key, bid.author, bid.permlink, account.name, permlink, permlink, content, '{"app":"postpromoter/1.6.0"}', function (err, result) {
-          if (err)
-            utils.log(err, result);
-        });
-      }
     } else {
       utils.log(err, result);
 
@@ -176,6 +169,24 @@ function sendVote(bid, retries) {
       }
     }
   });
+}
+
+function sendComment(bid) {
+  // If promotion content is specified in the config then use it to comment on the upvoted post
+  if (config.promotion_content && config.promotion_content != '') {
+
+    // Generate the comment permlink via steemit standard convention
+    var permlink = 're-' + bid.author.replace(/\./g, '') + '-' + bid.permlink + '-' + new Date().toISOString().replace(/-|:|\./g, '').toLowerCase();
+
+    // Replace variables in the promotion content
+    var content = config.promotion_content.replace(/\{weight\}/g, utils.format(bid.weight / 100)).replace(/\{botname\}/g, config.account).replace(/\{sender\}/g, bid.sender);
+
+    // Broadcast the comment
+    steem.broadcast.comment(config.posting_key, bid.author, bid.permlink, account.name, permlink, permlink, content, '{"app":"postpromoter/1.6.0"}', function (err, result) {
+      if (err)
+        utils.log(err, result);
+    });
+  }
 }
 
 function getTransactions() {
