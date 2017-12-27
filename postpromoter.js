@@ -125,8 +125,8 @@ function startVoting(bids) {
     bids[i].weight = Math.round(config.batch_vote_weight * 100 * (getUsdValue(bids[i]) / total));
   }
 
-  vote(bids);
   comment(bids.slice());
+  vote(bids);
 }
 
 function vote(bids) {
