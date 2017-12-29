@@ -16,13 +16,13 @@
   "price_feed_url": "https://postpromoter.com/api/prices",
   "blacklist": ["account1", "account2"],
   "refunds_enabled": true,
-  "no_refund": ["bittrex", "poloniex", "openledger", "blocktrades"],
+  "no_refund": ["bittrex", "poloniex", "openledger", "blocktrades", "minnowbooster"],
   "promotion_content": "You got a {weight}% upvote from @{botname} courtesy of @{sender}!",
   "auto_withdrawal": {
     "active": true,
     "accounts": [
       {
-        "name": "account1",
+        "name": "$delegators",
         "stake": 8000
       },
       {

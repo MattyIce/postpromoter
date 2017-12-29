@@ -31,13 +31,13 @@ Then set the following options in config.json:
   "price_feed_url": "https://postpromoter.com/api/prices", // URL of SBD and STEEM price feed to use for valuing bids in multiple currencies
   "blacklist": ["account1", "account2"], // List of blacklisted accounts
   "refunds_enabled": true,
-  "no_refund": ["bittrex", "poloniex", "openledger", "blocktrades"], // Don't refund transactions from these accounts!
+  "no_refund": ["bittrex", "poloniex", "openledger", "blocktrades", "minnowbooster"], // Don't refund transactions from these accounts!
   "promotion_content": "You got a {weight}% upvote from @{botname} courtesy of @{sender}!", // Change this to whatever you want the bot to post as a comment when it votes, or leave it out or blank for no comment
   "auto_withdrawal": {
     "active": true, // Activate the auto withdrawal function (will withdraw all accepted currencies)
     "accounts": [	// List of accounts to receive daily withdrawals and the amount to send to each
       {
-        "name": "account1",
+        "name": "$delegators",  // Use the special name '$delegators' to split this portion of the payout among all delegators to the account based on the amount of their delegation
         "stake": 8000
       },
       {

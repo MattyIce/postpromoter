@@ -5,17 +5,19 @@ var utils = require('./utils');
 var account = null;
 var last_trans = 0;
 var outstanding_bids = [];
+var delegators = [];
 var last_round = [];
 var config = null;
 var first_load = true;
 var isVoting = false;
 var last_withdrawal = null;
+var use_delegators = false;
 var steem_price = 1;  // This will get overridden with actual prices if a price_feed_url is specified in settings
 var sbd_price = 1;    // This will get overridden with actual prices if a price_feed_url is specified in settings
 
 steem.api.setOptions({ url: 'https://api.steemit.com' });
 
-utils.log("*START*");
+utils.log("* START - Version: 1.7.0 *");
 
 // Load the settings from the config file
 config = JSON.parse(fs.readFileSync("config.json"));
@@ -33,6 +35,19 @@ if(config.api && config.api.enabled) {
 
   app.get('/api/bids', (req, res) => res.json({ current_round: outstanding_bids, last_round: last_round }));
   app.listen(config.api.port, () => utils.log('API running on port ' + config.api.port))
+}
+
+// Check whether or not auto-withdrawals are set to be paid to delegators.
+use_delegators = config.auto_withdrawal && config.auto_withdrawal.active && config.auto_withdrawal.accounts.find(a => a.name == '$delegators');
+
+// If so then we need to load the list of delegators to the account
+if(use_delegators) {
+  var del = require('./delegators');
+  del.loadDelegations(config.account, function(d) {
+    delegators = d;
+    var vests = delegators.reduce(function (total, v) { return total + parseFloat(v.vesting_shares); }, 0);
+    utils.log('Delegators Loaded - ' + delegators.length + ' delegators and ' + vests + ' VESTS in total!');
+  });
 }
 
 // Check if bot state has been saved to disk, in which case load it
@@ -239,6 +254,16 @@ function getTransactions() {
               // Bid amount is just right!
               checkPost(op[1].memo, amount, currency, op[1].from);
             }
+          } else if(use_delegators && op[0] == 'delegate_vesting_shares' && op[1].delegatee == account.name) {
+            // If we are paying out to delegators, then update the list of delegators when new delegation transactions come in
+            var delegator = delegators.find(d => d.delegator == op[1].delegator);
+
+            if(delegator)
+              delegator.vesting_shares = op[1].vesting_shares;
+            else
+              delegators.push({ delegator: op[1].delegator, vesting_shares: op[1].vesting_shares });
+
+            utils.log('*** Delegation Update - ' + op[1].delegator + ' has delegated ' + op[1].vesting_shares);
           }
 
           // Save the ID of the last transaction that was processed.
@@ -410,31 +435,49 @@ function processWithdrawals() {
     var total_stake = config.auto_withdrawal.accounts.reduce(function (total, info) { return total + info.stake; }, 0);
 
     config.auto_withdrawal.accounts.forEach(function (withdrawal_account) {
-      // Load account details of the account we are sending the withdrawal to (this is needed for encrypted memos)
-      steem.api.getAccounts([withdrawal_account.name], function (err, result) {
-        var to_account = result[0];
+      // If this is the special $delegators account, split it between all delegators to the bot
+      if(withdrawal_account.name == '$delegators') {
+        // Get the total amount delegated by all delegators
+        var total_vests = delegators.reduce(function (total, v) { return total + parseFloat(v.vesting_shares); }, 0);
 
-        if (has_sbd) {
-          // Calculate this accounts percentage of the total earnings
-          var amount = parseFloat(account.sbd_balance) * (withdrawal_account.stake / total_stake) - 0.001;
-
-          // Withdraw all available SBD to the specified account
-          sendWithdrawal(to_account, amount, 'SBD', 0)
-        }
-
-        if (has_steem) {
-          // Calculate this accounts percentage of the total earnings
-          var amount = parseFloat(account.balance) * (withdrawal_account.stake / total_stake);
-
-          // Withdraw all available STEEM to the specified account
-          sendWithdrawal(to_account, amount, 'STEEM', 0)
-        }
-      });
+        // Send the withdrawal to each delegator based on their delegation amount
+        delegators.forEach(function(delegator) {
+          sendWithdrawals(delegator.delegator, (withdrawal_account.stake / total_stake) * (parseFloat(delegator.vesting_shares) / total_vests), has_sbd, has_steem);
+        });
+      } else {
+        sendWithdrawals(withdrawal_account.name, withdrawal_account.stake / total_stake, has_sbd, has_steem);
+      }
     });
   }
 }
 
+function sendWithdrawals(account_name, stake, has_sbd, has_steem) {
+  // Load account details of the account we are sending the withdrawal to (this is needed for encrypted memos)
+  steem.api.getAccounts([account_name], function (err, result) {
+    var to_account = result[0];
+
+    if (has_sbd) {
+      // Calculate this accounts percentage of the total earnings
+      var amount = parseFloat(account.sbd_balance) * stake - 0.001;
+
+      // Withdraw all available SBD to the specified account
+      sendWithdrawal(to_account, amount, 'SBD', 0);
+    }
+
+    if (has_steem) {
+      // Calculate this accounts percentage of the total earnings
+      var amount = parseFloat(account.balance) * stake - 0.001;
+
+      // Withdraw all available STEEM to the specified account
+      sendWithdrawal(to_account, amount, 'STEEM', 0);
+    }
+  });
+}
+
 function sendWithdrawal(to_account, amount, currency, retries) {
+  if(amount <= 0)
+    return;
+
   var formatted_amount = utils.format(amount, 3).replace(/,/g, '') + ' ' + currency;
   var memo = config.auto_withdrawal.memo.replace(/\{balance\}/g, formatted_amount);
 
