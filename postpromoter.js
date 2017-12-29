@@ -452,6 +452,9 @@ function processWithdrawals() {
 }
 
 function sendWithdrawals(account_name, stake, has_sbd, has_steem) {
+  if(stake <= 0)
+    return;
+    
   // Load account details of the account we are sending the withdrawal to (this is needed for encrypted memos)
   steem.api.getAccounts([account_name], function (err, result) {
     var to_account = result[0];

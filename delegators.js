@@ -1,11 +1,12 @@
 const steem = require('steem');
 
+var delegation_transactions = [];
+
 function loadDelegations(account, callback) {
   getTransactions(account, -1, callback);
 }
 
 function getTransactions(account, start, callback) {
-  var delegation_transactions = [];
   var last_trans = start;
 
   steem.api.getAccountHistory(account, start, (start < 0) ? 10000 : Math.min(start, 10000), function (err, result) {
@@ -29,17 +30,20 @@ function getTransactions(account, start, callback) {
     if(last_trans > 0)
       getTransactions(account, last_trans, callback);
     else
-      processDelegations(delegation_transactions, callback);
+      processDelegations(callback);
   });
 }
 
-function processDelegations(delegation_transactions, callback) {
+function processDelegations(callback) {
   var delegations = [];
+
+  // Go through the delegation transactions from oldest to newest to find the final delegated amount from each account
   delegation_transactions.reverse();
 
   for(var i = 0; i < delegation_transactions.length; i++) {
     var trans = delegation_transactions[i];
 
+    // Check if this is a new delegation or an update to an existing delegation from this account
     var delegation = delegations.find(d => d.delegator == trans.data.delegator);
 
     if(delegation) {
@@ -49,8 +53,11 @@ function processDelegations(delegation_transactions, callback) {
     }
   }
 
+  delegation_transactions = [];
+
+  // Return a list of all delegations (and filter out any that are 0)
   if(callback)
-    callback(delegations);
+    callback(delegations.filter(function(d) { return parseFloat(d.vesting_shares) > 0; }));
 }
 
 module.exports = {
