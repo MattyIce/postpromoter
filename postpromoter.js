@@ -17,7 +17,7 @@ var sbd_price = 1;    // This will get overridden with actual prices if a price_
 
 steem.api.setOptions({ url: 'https://api.steemit.com' });
 
-utils.log("* START - Version: 1.7.0 *");
+utils.log("* START - Version: 1.7.1 *");
 
 // Load the settings from the config file
 config = JSON.parse(fs.readFileSync("config.json"));
@@ -148,16 +148,16 @@ function vote(bids) {
   // Get the first bid in the list
   sendVote(bids.pop(), 0);
 
-  // If there are more bids, vote on the next one after 20 seconds
+  // If there are more bids, vote on the next one after 10 seconds
   if(bids.length > 0) {
-    setTimeout(function() { vote(bids); }, 5000);
+    setTimeout(function() { vote(bids); }, 10000);
   } else {
     setTimeout(function() {
       utils.log('=======================================================');
       utils.log('Voting Complete!');
       utils.log('=======================================================');
       isVoting = false;
-    }, 5000);
+    }, 10000);
   }
 }
 
@@ -454,7 +454,7 @@ function processWithdrawals() {
 function sendWithdrawals(account_name, stake, has_sbd, has_steem) {
   if(stake <= 0)
     return;
-    
+
   // Load account details of the account we are sending the withdrawal to (this is needed for encrypted memos)
   steem.api.getAccounts([account_name], function (err, result) {
     var to_account = result[0];
