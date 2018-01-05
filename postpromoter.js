@@ -14,10 +14,11 @@ var last_withdrawal = null;
 var use_delegators = false;
 var steem_price = 1;  // This will get overridden with actual prices if a price_feed_url is specified in settings
 var sbd_price = 1;    // This will get overridden with actual prices if a price_feed_url is specified in settings
+var version = '1.7.2';
 
 steem.api.setOptions({ url: 'https://api.steemit.com' });
 
-utils.log("* START - Version: 1.7.1 *");
+utils.log("* START - Version: " + version + " *");
 
 // Load the settings from the config file
 config = JSON.parse(fs.readFileSync("config.json"));
@@ -66,7 +67,7 @@ if (fs.existsSync('state.json')) {
   if(state.last_withdrawal)
     last_withdrawal = state.last_withdrawal;
 
-  utils.log('Restored saved bot state: ' + JSON.stringify(state));
+  utils.log('Restored saved bot state: ' + JSON.stringify({ last_trans: last_trans, bids: outstanding_bids.length, last_withdrawal: last_withdrawal }));
 }
 
 // Schedule to run every 10 seconds
@@ -197,9 +198,12 @@ function sendComment(bid) {
     var content = config.promotion_content.replace(/\{weight\}/g, utils.format(bid.weight / 100)).replace(/\{botname\}/g, config.account).replace(/\{sender\}/g, bid.sender);
 
     // Broadcast the comment
-    steem.broadcast.comment(config.posting_key, bid.author, bid.permlink, account.name, permlink, permlink, content, '{"app":"postpromoter/1.6.0"}', function (err, result) {
-      if (err)
+    steem.broadcast.comment(config.posting_key, bid.author, bid.permlink, account.name, permlink, permlink, content, '{"app":"postpromoter/' + version + '"}', function (err, result) {
+      if (!err && result) {
+        utils.log('Posted comment: ' + permlink);
+      } else {
         utils.log(err, result);
+      }
     });
   }
 }
