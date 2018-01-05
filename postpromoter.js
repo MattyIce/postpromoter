@@ -222,6 +222,11 @@ function getTransactions() {
   steem.api.getAccountHistory(account.name, -1, num_trans, function (err, result) {
     first_load = false;
 
+    if (err || !result) {
+      utils.log(err, result);
+      return;
+    }
+
     result.forEach(function(trans) {
       var op = trans[1].op;
 
@@ -514,12 +519,16 @@ function loadPrices() {
 
   // Load the price feed data
   request.get(config.price_feed_url, function (e, r, data) {
-    var prices = JSON.parse(data);
-    steem_price = prices.steem_price;
-    sbd_price = prices.sbd_price;
+    try {
+      var prices = JSON.parse(data);
+      steem_price = prices.steem_price;
+      sbd_price = prices.sbd_price;
 
-    if(config.detailed_logging)
-      utils.log('Prices Loaded - STEEM: ' + utils.format(steem_price) + ', SBD: ' + utils.format(sbd_price));
+      if(config.detailed_logging)
+        utils.log('Prices Loaded - STEEM: ' + utils.format(steem_price) + ', SBD: ' + utils.format(sbd_price));
+    } catch (err) {
+      utils.log('Error loading price feed: ' + err);
+    }
   });
 }
 
