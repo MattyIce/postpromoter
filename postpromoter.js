@@ -16,7 +16,7 @@ var steem_price = 1;  // This will get overridden with actual prices if a price_
 var sbd_price = 1;    // This will get overridden with actual prices if a price_feed_url is specified in settings
 var version = '1.7.3';
 
-steem.api.setOptions({ url: 'https://api.steemit.com' });
+steem.api.setOptions({ url: 'https://rpc.buildteam.io' });
 
 utils.log("* START - Version: " + version + " *");
 
@@ -93,7 +93,7 @@ function startProcess() {
       if (config.auto_withdrawal.frequency == 'daily')
         checkAutoWithdraw();
     } else
-      utils.log(err, result);
+      utils.log('Error loading bot account: ' + err);
   });
 
   if (account && !isVoting) {
@@ -182,7 +182,7 @@ function sendVote(bid, retries, callback) {
       if (callback)
         callback();
     } else {
-      utils.log(err, result);
+      utils.log('Error sending vote for: @' + bid.author + '/' + bid.permlink + ', Error: ' + err);
 
       // Try again one time on error
       if(retries < 1)
@@ -212,7 +212,7 @@ function sendComment(bid) {
       if (!err && result) {
         utils.log('Posted comment: ' + permlink);
       } else {
-        utils.log(err, result);
+        utils.log('Error posting comment: ' + permlink + ', Error: ' + err);
       }
     });
   }
@@ -237,7 +237,7 @@ function getTransactions() {
     first_load = false;
 
     if (err || !result) {
-      utils.log(err, result);
+      utils.log('Error loading account history: ' + err);
       return;
     }
 
@@ -387,7 +387,7 @@ function refund(sender, amount, currency, reason) {
   // Issue the refund.
   steem.broadcast.transfer(config.active_key, config.account, sender, utils.format(amount, 3) + ' ' + currency, memo, function (err, response) {
     if (err)
-      utils.log(err, response);
+      utils.log('Error sending refund to @' + sender + ' for: ' + amount + ' ' + currency + ', Error: ' + err);
     else {
       utils.log('Refund of ' + amount + ' ' + currency + ' sent to @' + sender + ' for reason: ' + reason);
     }
@@ -402,7 +402,7 @@ function claimRewards() {
   if (parseFloat(account.reward_steem_balance) > 0 || parseFloat(account.reward_sbd_balance) > 0 || parseFloat(account.reward_vesting_balance) > 0) {
     steem.broadcast.claimRewardBalance(config.posting_key, config.account, account.reward_steem_balance, account.reward_sbd_balance, account.reward_vesting_balance, function (err, result) {
       if (err) {
-        utils.log(err);
+        utils.log('Error claiming rewards: ' + err);
       }
 
       if (result) {
@@ -510,7 +510,7 @@ function sendWithdrawal(to_account, amount, currency, retries) {
   // Send the withdrawal amount to the specified account
   steem.broadcast.transfer(config.active_key, config.account, to_account.name, formatted_amount, memo, function (err, response) {
     if (err) {
-      utils.log(err, response);
+      utils.log('Error sending withdrawal transaction to: ' + to_account.name + ', Error: ' + err);
 
       // Try again once if there is an error
       if(retries < 1)
@@ -537,9 +537,6 @@ function loadPrices() {
       steem_price = parseFloat(JSON.parse(data)[0].price_usd);
 
       utils.log("Loaded STEEM price: " + steem_price);
-
-      if(config.detailed_logging)
-        utils.log('Price Loaded - STEEM: ' + utils.format(steem_price));
     } catch (err) {
       utils.log('Error loading STEEM price: ' + err);
     }
@@ -551,9 +548,6 @@ function loadPrices() {
       sbd_price = parseFloat(JSON.parse(data)[0].price_usd);
 
       utils.log("Loaded SBD price: " + sbd_price);
-
-      if (config.detailed_logging)
-        utils.log('Price Loaded - SBD: ' + utils.format(sbd_price));
     } catch (err) {
       utils.log('Error loading SBD price: ' + err);
     }
