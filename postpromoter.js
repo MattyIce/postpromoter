@@ -73,9 +73,9 @@ if (fs.existsSync('state.json')) {
 // Schedule to run every 10 seconds
 setInterval(startProcess, 10000);
 
-// Load updated STEEM and SBD prices every minute
+// Load updated STEEM and SBD prices every 30 minutes
 loadPrices();
-setInterval(loadPrices, 60000);
+setInterval(loadPrices, 30 * 60 * 1000);
 
 function startProcess() {
   // Load the settings from the config file each time so we can pick up any changes
@@ -83,14 +83,17 @@ function startProcess() {
 
   // Load the bot account info
   steem.api.getAccounts([config.account], function (err, result) {
-    account = result[0];
+    if (result && !err) {
+      account = result[0];
 
-    // Check if there are any rewards to claim.
-    claimRewards();
+      // Check if there are any rewards to claim.
+      claimRewards();
 
-    // Check if it is time to withdraw funds.
-    if (config.auto_withdrawal.frequency == 'daily')
-      checkAutoWithdraw();
+      // Check if it is time to withdraw funds.
+      if (config.auto_withdrawal.frequency == 'daily')
+        checkAutoWithdraw();
+    } else
+      utils.log(err, result);
   });
 
   if (account && !isVoting) {
@@ -516,7 +519,7 @@ function sendWithdrawal(to_account, amount, currency, retries) {
 }
 
 function loadPrices() {
-  if(!config.price_feed_url || config.price_feed_url == '')
+  if (config.currencies_accepted.length <= 1)
     return;
 
   // Require the "request" library for making HTTP requests
