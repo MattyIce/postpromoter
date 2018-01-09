@@ -151,19 +151,19 @@ function startVoting(bids) {
 
 function vote(bids) {
   // Get the first bid in the list
-  sendVote(bids.pop(), 0);
-
-  // If there are more bids, vote on the next one after 10 seconds
-  if(bids.length > 0) {
-    setTimeout(function() { vote(bids); }, 10000);
-  } else {
-    setTimeout(function() {
-      utils.log('=======================================================');
-      utils.log('Voting Complete!');
-      utils.log('=======================================================');
-      isVoting = false;
-    }, 10000);
-  }
+  sendVote(bids.pop(), 0, function () {
+    // If there are more bids, vote on the next one after 10 seconds
+    if (bids.length > 0) {
+      setTimeout(function () { vote(bids); }, 5000);
+    } else {
+      setTimeout(function () {
+        utils.log('=======================================================');
+        utils.log('Voting Complete!');
+        utils.log('=======================================================');
+        isVoting = false;
+      }, 5000);
+    }
+  });
 }
 
 function comment(bids) {
@@ -173,19 +173,25 @@ function comment(bids) {
     setTimeout(function () { comment(bids); }, 30000);
 }
 
-function sendVote(bid, retries) {
+function sendVote(bid, retries, callback) {
   utils.log('Bid Weight: ' + bid.weight);
   steem.broadcast.vote(config.posting_key, account.name, bid.author, bid.permlink, bid.weight, function (err, result) {
     if (!err && result) {
       utils.log(utils.format(bid.weight / 100) + '% vote cast for: @' + bid.author + '/' + bid.permlink);
+
+      if (callback)
+        callback();
     } else {
       utils.log(err, result);
 
       // Try again one time on error
       if(retries < 1)
-        sendVote(bid, retries + 1);
+        sendVote(bid, retries + 1, callback);
       else {
         utils.log('============= Vote transaction failed two times for: ' + bid.permlink + ' ===============');
+
+        if (callback)
+          callback();
       }
     }
   });
