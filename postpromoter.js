@@ -14,7 +14,7 @@ var last_withdrawal = null;
 var use_delegators = false;
 var steem_price = 1;  // This will get overridden with actual prices if a price_feed_url is specified in settings
 var sbd_price = 1;    // This will get overridden with actual prices if a price_feed_url is specified in settings
-var version = '1.7.2';
+var version = '1.7.3';
 
 steem.api.setOptions({ url: 'https://api.steemit.com' });
 
@@ -74,6 +74,7 @@ if (fs.existsSync('state.json')) {
 setInterval(startProcess, 10000);
 
 // Load updated STEEM and SBD prices every minute
+loadPrices();
 setInterval(loadPrices, 60000);
 
 function startProcess() {
@@ -522,16 +523,30 @@ function loadPrices() {
   var request = require("request");
 
   // Load the price feed data
-  request.get(config.price_feed_url, function (e, r, data) {
+  request.get('https://api.coinmarketcap.com/v1/ticker/steem/', function (e, r, data) {
     try {
-      var prices = JSON.parse(data);
-      steem_price = prices.steem_price;
-      sbd_price = prices.sbd_price;
+      steem_price = parseFloat(JSON.parse(data)[0].price_usd);
+
+      utils.log("Loaded STEEM price: " + steem_price);
 
       if(config.detailed_logging)
-        utils.log('Prices Loaded - STEEM: ' + utils.format(steem_price) + ', SBD: ' + utils.format(sbd_price));
+        utils.log('Price Loaded - STEEM: ' + utils.format(steem_price));
     } catch (err) {
-      utils.log('Error loading price feed: ' + err);
+      utils.log('Error loading STEEM price: ' + err);
+    }
+  });
+
+  // Load the price feed data
+  request.get('https://api.coinmarketcap.com/v1/ticker/steem-dollars/', function (e, r, data) {
+    try {
+      sbd_price = parseFloat(JSON.parse(data)[0].price_usd);
+
+      utils.log("Loaded SBD price: " + sbd_price);
+
+      if (config.detailed_logging)
+        utils.log('Price Loaded - SBD: ' + utils.format(sbd_price));
+    } catch (err) {
+      utils.log('Error loading SBD price: ' + err);
     }
   });
 }
