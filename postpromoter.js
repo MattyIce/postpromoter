@@ -14,14 +14,19 @@ var last_withdrawal = null;
 var use_delegators = false;
 var steem_price = 1;  // This will get overridden with actual prices if a price_feed_url is specified in settings
 var sbd_price = 1;    // This will get overridden with actual prices if a price_feed_url is specified in settings
-var version = '1.7.3';
-
-steem.api.setOptions({ url: 'https://rpc.buildteam.io' });
-
-utils.log("* START - Version: " + version + " *");
+var version = '1.7.4';
 
 // Load the settings from the config file
 config = JSON.parse(fs.readFileSync("config.json"));
+
+// Connect to the specified RPC node
+var rpc_node = config.rpc_node ? config.rpc_node : 'https://api.steemit.com';
+steem.api.setOptions({ transport: 'http', uri: rpc_node, url: rpc_node });
+
+utils.log("* START - Version: " + version + " *");
+
+// Load Steem global variables
+utils.updateSteemVariables();
 
 // If the API is enabled, start the web server
 if(config.api && config.api.enabled) {
@@ -43,12 +48,25 @@ use_delegators = config.auto_withdrawal && config.auto_withdrawal.active && conf
 
 // If so then we need to load the list of delegators to the account
 if(use_delegators) {
-  var del = require('./delegators');
-  del.loadDelegations(config.account, function(d) {
-    delegators = d;
+  if(fs.existsSync('delegators.json')) {
+    delegators = JSON.parse(fs.readFileSync("delegators.json"));
+
     var vests = delegators.reduce(function (total, v) { return total + parseFloat(v.vesting_shares); }, 0);
-    utils.log('Delegators Loaded - ' + delegators.length + ' delegators and ' + vests + ' VESTS in total!');
-  });
+    utils.log('Delegators Loaded (from disk) - ' + delegators.length + ' delegators and ' + vests + ' VESTS in total!');
+  }
+  else
+  {
+    var del = require('./delegators');
+    utils.log('Started loading delegators from account history...');
+    del.loadDelegations(config.account, function(d) {
+      delegators = d;
+      var vests = delegators.reduce(function (total, v) { return total + parseFloat(v.vesting_shares); }, 0);
+      utils.log('Delegators Loaded (from account history) - ' + delegators.length + ' delegators and ' + vests + ' VESTS in total!');
+
+      // Save the list of delegators to disk
+      saveDelegators();
+    });
+  }
 }
 
 // Check if bot state has been saved to disk, in which case load it
@@ -282,6 +300,9 @@ function getTransactions() {
             else
               delegators.push({ delegator: op[1].delegator, vesting_shares: op[1].vesting_shares });
 
+            // Save the updated list of delegators to disk
+            saveDelegators();
+
             utils.log('*** Delegation Update - ' + op[1].delegator + ' has delegated ' + op[1].vesting_shares);
           }
 
@@ -364,6 +385,14 @@ function saveState() {
     if (err)
       utils.log(err);
   });
+}
+
+function saveDelegators() {
+    // Save the list of delegators to disk
+    fs.writeFile('delegators.json', JSON.stringify(delegators), function (err) {
+      if (err)
+        utils.log('Error saving delegators to disk: ' + err);
+    });
 }
 
 function refund(sender, amount, currency, reason) {
@@ -516,7 +545,7 @@ function sendWithdrawal(to_account, amount, currency, retries) {
       if(retries < 1)
         sendWithdrawal(to_account, amount, currency, retries + 1);
       else {
-        utils.log('============= Withdrawal failed two times to: ' + to_account + ' for: ' + formatted_amount + ' ===============');
+        utils.log('============= Withdrawal failed two times to: ' + to_account.name + ' for: ' + formatted_amount + ' ===============');
       }
     } else {
       utils.log('$$$ Auto withdrawal: ' + formatted_amount + ' sent to @' + to_account.name);

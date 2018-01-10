@@ -27,7 +27,6 @@ var HOURS = 60 * 60;
 
      setTimeout(updateSteemVariables, 180 * 1000)
  }
- updateSteemVariables();
 
  function getVotingPower(account) {
      var voting_power = account.voting_power;
@@ -122,6 +121,7 @@ function format(n, c, d, t) {
  function log(msg) { console.log(new Date().toString() + ' - ' + msg); }
 
  module.exports = {
+   updateSteemVariables: updateSteemVariables,
    getVotingPower: getVotingPower,
    getVoteValue: getVoteValue,
    timeTilFullPower: timeTilFullPower,

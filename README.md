@@ -14,6 +14,7 @@ $ mv config-example.json config.json
 Then set the following options in config.json:
 ```
 {
+  "rpc_node": "https://api.steemit.com", // Set the RPC node you would like to connect to (https://api.steemit.com is the default if this is not set)
   "disabled_mode": false, // Set this to true to refund all funds sent to the bot
   "detailed_logging": false, // Whether or not detailed logging is enabled
   "account": "yourbotaccount",
@@ -28,7 +29,6 @@ Then set the following options in config.json:
   "max_post_age": 144, // In hours, 144 hours = 6 days
   "allow_comments": true,
   "currencies_accepted": ["SBD", "STEEM"], // Which currencies to accept
-  "price_feed_url": "https://postpromoter.com/api/prices", // URL of SBD and STEEM price feed to use for valuing bids in multiple currencies
   "blacklist": ["account1", "account2"], // List of blacklisted accounts
   "refunds_enabled": true,
   "no_refund": ["bittrex", "poloniex", "openledger", "blocktrades", "minnowbooster"], // Don't refund transactions from these accounts!

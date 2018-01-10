@@ -1,4 +1,5 @@
 {
+  "rpc_node": "https://api.steemit.com",
   "disabled_mode": false,
   "detailed_logging": false,
   "account": "your_bot_account_name",
@@ -13,7 +14,6 @@
   "max_post_age": 144,
   "allow_comments": true,
   "currencies_accepted": ["SBD", "STEEM"],
-  "price_feed_url": "https://postpromoter.com/api/prices",
   "blacklist": ["account1", "account2"],
   "refunds_enabled": true,
   "no_refund": ["bittrex", "poloniex", "openledger", "blocktrades", "minnowbooster"],

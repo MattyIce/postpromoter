@@ -63,3 +63,4 @@ typings/
 
 # other
 .sublime-project
+delegators.json
