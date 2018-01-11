@@ -118,8 +118,11 @@ function startProcess() {
     // Load the current voting power of the account
     var vp = utils.getVotingPower(account);
 
-    if(config.detailed_logging)
-      utils.log('Voting Power: ' + utils.format(vp / 100) + '% | Time until next round: ' + utils.toTimer(utils.timeTilFullPower(vp)));
+    if(config.detailed_logging) {
+      var bids_steem = outstanding_bids.reduce(function(t, b) { return t + ((b.currency == 'STEEM') ? b.amount : 0); }, 0);
+      var bids_sbd = outstanding_bids.reduce(function(t, b) { return t + ((b.currency == 'SBD') ? b.amount : 0); }, 0);
+      utils.log('Voting Power: ' + utils.format(vp / 100) + '% | Time until next round: ' + utils.toTimer(utils.timeTilFullPower(vp)) + ' | Bids: ' + outstanding_bids.length + ' | ' + bids_sbd + ' SBD | ' + bids_steem + ' STEEM');
+    }
 
     // We are at 100% voting power - time to vote!
     if (vp >= 10000 && outstanding_bids.length > 0) {
@@ -482,73 +485,128 @@ function processWithdrawals() {
 
     var total_stake = config.auto_withdrawal.accounts.reduce(function (total, info) { return total + info.stake; }, 0);
 
-    config.auto_withdrawal.accounts.forEach(function (withdrawal_account) {
+    var withdrawals = [];
+
+    for(var i = 0; i < config.auto_withdrawal.accounts.length; i++) {
+      var withdrawal_account = config.auto_withdrawal.accounts[i];
+
       // If this is the special $delegators account, split it between all delegators to the bot
       if(withdrawal_account.name == '$delegators') {
         // Get the total amount delegated by all delegators
         var total_vests = delegators.reduce(function (total, v) { return total + parseFloat(v.vesting_shares); }, 0);
 
         // Send the withdrawal to each delegator based on their delegation amount
-        delegators.forEach(function(delegator) {
-          sendWithdrawals(delegator.delegator, (withdrawal_account.stake / total_stake) * (parseFloat(delegator.vesting_shares) / total_vests), has_sbd, has_steem);
-        });
+        for(var j = 0; j < delegators.length; j++) {
+          var delegator = delegators[j];
+
+          if(has_sbd) {
+            withdrawals.push({
+              to: delegator.delegator,
+              currency: 'SBD',
+              amount: parseFloat(account.sbd_balance) * (withdrawal_account.stake / total_stake) * (parseFloat(delegator.vesting_shares) / total_vests) - 0.001
+            });
+          }
+
+          if(has_steem) {
+            withdrawals.push({
+              to: delegator.delegator,
+              currency: 'STEEM',
+              amount: parseFloat(account.balance) * (withdrawal_account.stake / total_stake) * (parseFloat(delegator.vesting_shares) / total_vests) - 0.001
+            });
+          }
+        }
       } else {
-        sendWithdrawals(withdrawal_account.name, withdrawal_account.stake / total_stake, has_sbd, has_steem);
+        if(has_sbd) {
+          withdrawals.push({
+            to: withdrawal_account.name,
+            currency: 'SBD',
+            amount: parseFloat(account.sbd_balance) * withdrawal_account.stake / total_stake - 0.001
+          });
+        }
+
+        if(has_steem) {
+          withdrawals.push({
+            to: withdrawal_account.name,
+            currency: 'STEEM',
+            amount: parseFloat(account.balance) * withdrawal_account.stake / total_stake - 0.001
+          });
+        }
       }
-    });
+    }
+
+    // Check if the memo should be encrypted
+    var encrypt = (config.auto_withdrawal.memo.startsWith('#') && config.memo_key && config.memo_key != '');
+
+    if(encrypt) {
+      // Get list of unique withdrawal account names
+      var account_names = withdrawals.map(w => w.to).filter((v, i, s) => s.indexOf(v) === i);
+      console.log(account_names);
+      // Load account info to get memo keys for encryption
+      steem.api.getAccounts(account_names, function (err, result) {
+        if (result && !err) {
+          for(var i = 0; i < result.length; i++) {
+            var withdrawal_account = result[i];
+            var matches = withdrawals.filter(w => w.to == withdrawal_account.name);
+
+            for(var j = 0; j < matches.length; j++) {
+              matches[j].memo_key = withdrawal_account.memo_key;
+            }
+          }
+          console.log(withdrawals);
+          sendWithdrawals(withdrawals);
+        } else
+          utils.log('Error loading withdrawal accounts: ' + err);
+      });
+    } else
+      sendWithdrawals(withdrawals);
   }
 }
 
-function sendWithdrawals(account_name, stake, has_sbd, has_steem) {
-  if(stake <= 0)
-    return;
-
-  // Load account details of the account we are sending the withdrawal to (this is needed for encrypted memos)
-  steem.api.getAccounts([account_name], function (err, result) {
-    var to_account = result[0];
-
-    if (has_sbd) {
-      // Calculate this accounts percentage of the total earnings
-      var amount = parseFloat(account.sbd_balance) * stake - 0.001;
-
-      // Withdraw all available SBD to the specified account
-      sendWithdrawal(to_account, amount, 'SBD', 0);
-    }
-
-    if (has_steem) {
-      // Calculate this accounts percentage of the total earnings
-      var amount = parseFloat(account.balance) * stake - 0.001;
-
-      // Withdraw all available STEEM to the specified account
-      sendWithdrawal(to_account, amount, 'STEEM', 0);
-    }
+function sendWithdrawals(withdrawals) {
+  // Send out withdrawal transactions one at a time
+  sendWithdrawal(withdrawals.pop(), 0, function() {
+    // If there are more withdrawals, send the next one.
+    if (withdrawals.length > 0)
+      sendWithdrawals(withdrawals);
+    else
+      utils.log('========== Withdrawals Complete! ==========');
   });
 }
 
-function sendWithdrawal(to_account, amount, currency, retries) {
-  if(amount <= 0)
+function sendWithdrawal(withdrawal, retries, callback) {
+  if(parseFloat(utils.format(withdrawal.amount, 3)) <= 0) {
+    if(callback)
+      callback();
+      
     return;
+  }
 
-  var formatted_amount = utils.format(amount, 3).replace(/,/g, '') + ' ' + currency;
+  var formatted_amount = utils.format(withdrawal.amount, 3).replace(/,/g, '') + ' ' + withdrawal.currency;
   var memo = config.auto_withdrawal.memo.replace(/\{balance\}/g, formatted_amount);
 
   // Encrypt memo
   if (memo.startsWith('#') && config.memo_key && config.memo_key != '')
-    memo = steem.memo.encode(config.memo_key, to_account.memo_key, memo);
+    memo = steem.memo.encode(config.memo_key, withdrawal.memo_key, memo);
 
   // Send the withdrawal amount to the specified account
-  steem.broadcast.transfer(config.active_key, config.account, to_account.name, formatted_amount, memo, function (err, response) {
+  steem.broadcast.transfer(config.active_key, config.account, withdrawal.to, formatted_amount, memo, function (err, response) {
     if (err) {
-      utils.log('Error sending withdrawal transaction to: ' + to_account.name + ', Error: ' + err);
+      utils.log('Error sending withdrawal transaction to: ' + withdrawal.to + ', Error: ' + err);
 
       // Try again once if there is an error
       if(retries < 1)
-        sendWithdrawal(to_account, amount, currency, retries + 1);
+        sendWithdrawal(withdrawal, retries + 1, callback);
       else {
-        utils.log('============= Withdrawal failed two times to: ' + to_account.name + ' for: ' + formatted_amount + ' ===============');
+        utils.log('============= Withdrawal failed two times to: ' + withdrawal.to + ' for: ' + formatted_amount + ' ===============');
+
+        if(callback)
+          callback();
       }
     } else {
-      utils.log('$$$ Auto withdrawal: ' + formatted_amount + ' sent to @' + to_account.name);
+      utils.log('$$$ Auto withdrawal: ' + formatted_amount + ' sent to @' + withdrawal.to);
+
+      if(callback)
+        callback();
     }
   });
 }
