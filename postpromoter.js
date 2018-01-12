@@ -400,7 +400,7 @@ function saveDelegators() {
 
 function refund(sender, amount, currency, reason) {
   // Make sure refunds are enabled and the sender isn't on the no-refund list (for exchanges and things like that).
-  if (!config.refunds_enabled || (config.no_refund && config.no_refund.indexOf(sender) >= 0)) {
+  if (!config.refunds_enabled || sender == config.account || (config.no_refund && config.no_refund.indexOf(sender) >= 0)) {
     utils.log("Invalid bid - " + reason + ' NO REFUND');
     return;
   }
