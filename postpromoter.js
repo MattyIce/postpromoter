@@ -158,7 +158,7 @@ function startVoting(bids) {
   }, 0);
 
   utils.log('=======================================================');
-  utils.log('Bidding Round End! Starting to vote! Total bids: $' + total);
+  utils.log('Bidding Round End! Starting to vote! Total bids: ' + bids.length + ' - $' + total);
   utils.log('=======================================================');
 
   for(var i = 0; i < bids.length; i++) {
@@ -369,7 +369,7 @@ function checkPost(memo, amount, currency, sender) {
           }
         } else {
           // All good - push to the array of valid bids for this round
-          utils.log('Valid Bid - Amount: ' + amount + ', Title: ' + result.title);
+          utils.log('Valid Bid - Amount: ' + amount + ' ' + currency + ', Title: ' + result.title);
           outstanding_bids.push({ amount: amount, currency: currency, sender: sender, author: result.author, permlink: result.permlink, url: result.url });
         }
     });
@@ -577,7 +577,7 @@ function sendWithdrawal(withdrawal, retries, callback) {
   if(parseFloat(utils.format(withdrawal.amount, 3)) <= 0) {
     if(callback)
       callback();
-      
+
     return;
   }
 

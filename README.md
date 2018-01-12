@@ -3,6 +3,7 @@
 ## Installation
 ```
 $ git clone https://github.com/MattyIce/postpromoter.git
+$ npm install
 ```
 
 ## Configuration
