@@ -13,16 +13,30 @@ var HOURS = 60 * 60;
  var totalVestingShares;
  function updateSteemVariables() {
      steem.api.getRewardFund("post", function (e, t) {
+       if(t && !e) {
          rewardBalance = parseFloat(t.reward_balance.replace(" STEEM", ""));
          recentClaims = t.recent_claims;
+       } else {
+         log('Error loading reward fund: ' + e);
+       }
      });
+
      steem.api.getCurrentMedianHistoryPrice(function (e, t) {
+       if(t && !e) {
          steemPrice = parseFloat(t.base.replace(" SBD", "")) / parseFloat(t.quote.replace(" STEEM", ""));
+       } else {
+         log('Error loading steem price: ' + e);
+       }
      });
+
      steem.api.getDynamicGlobalProperties(function (e, t) {
+       if(t && !e) {
          votePowerReserveRate = t.vote_power_reserve_rate;
          totalVestingFund = parseFloat(t.total_vesting_fund_steem.replace(" STEEM", ""));
          totalVestingShares = parseFloat(t.total_vesting_shares.replace(" VESTS", ""));
+       } else {
+         log('Error loading global properties: ' + e);
+       }
      });
 
      setTimeout(updateSteemVariables, 180 * 1000)

@@ -182,6 +182,7 @@ function vote(bids) {
         utils.log('Voting Complete!');
         utils.log('=======================================================');
         isVoting = false;
+        first_load = true;
       }, 5000);
     }
   });
@@ -206,10 +207,10 @@ function sendVote(bid, retries, callback) {
       utils.log('Error sending vote for: @' + bid.author + '/' + bid.permlink + ', Error: ' + err);
 
       // Try again one time on error
-      if(retries < 1)
-        sendVote(bid, retries + 1, callback);
+      if(retries < 2)
+        setTimeout(function() { sendVote(bid, retries + 1, callback); }, 3000);
       else {
-        utils.log('============= Vote transaction failed two times for: ' + bid.permlink + ' ===============');
+        utils.log('============= Vote transaction failed three times for: ' + bid.permlink + ' ===============');
 
         if (callback)
           callback();
@@ -233,7 +234,7 @@ function sendComment(bid) {
       if (!err && result) {
         utils.log('Posted comment: ' + permlink);
       } else {
-        utils.log('Error posting comment: ' + permlink + ', Error: ' + err);
+        utils.log('Error posting comment: ' + permlink);
       }
     });
   }
@@ -434,7 +435,7 @@ function claimRewards() {
   if (parseFloat(account.reward_steem_balance) > 0 || parseFloat(account.reward_sbd_balance) > 0 || parseFloat(account.reward_vesting_balance) > 0) {
     steem.broadcast.claimRewardBalance(config.posting_key, config.account, account.reward_steem_balance, account.reward_sbd_balance, account.reward_vesting_balance, function (err, result) {
       if (err) {
-        utils.log('Error claiming rewards: ' + err);
+        utils.log('Error claiming rewards...will try again next time.');
       }
 
       if (result) {
