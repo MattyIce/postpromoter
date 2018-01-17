@@ -17,7 +17,7 @@ var sbd_price = 1;    // This will get overridden with actual prices if a price_
 var version = '1.7.4';
 
 // Load the settings from the config file
-config = JSON.parse(fs.readFileSync("config.json"));
+loadConfig();
 
 // Connect to the specified RPC node
 var rpc_node = config.rpc_node ? config.rpc_node : 'https://api.steemit.com';
@@ -97,7 +97,7 @@ setInterval(loadPrices, 30 * 60 * 1000);
 
 function startProcess() {
   // Load the settings from the config file each time so we can pick up any changes
-  config = JSON.parse(fs.readFileSync("config.json"));
+  loadConfig();
 
   // Load the bot account info
   steem.api.getAccounts([config.account], function (err, result) {
@@ -439,13 +439,14 @@ function claimRewards() {
       }
 
       if (result) {
+        if(config.detailed_logging) {
+          var rewards_message = "$$$ ==> Rewards Claim";
+          if (parseFloat(account.reward_sbd_balance) > 0) { rewards_message = rewards_message + ' SBD: ' + parseFloat(account.reward_sbd_balance); }
+          if (parseFloat(account.reward_steem_balance) > 0) { rewards_message = rewards_message + ' STEEM: ' + parseFloat(account.reward_steem_balance); }
+          if (parseFloat(account.reward_vesting_balance) > 0) { rewards_message = rewards_message + ' VESTS: ' + parseFloat(account.reward_vesting_balance); }
 
-        var rewards_message = "$$$ ==> Rewards Claim";
-        if (parseFloat(account.reward_sbd_balance) > 0) { rewards_message = rewards_message + ' SBD: ' + parseFloat(account.reward_sbd_balance); }
-        if (parseFloat(account.reward_steem_balance) > 0) { rewards_message = rewards_message + ' STEEM: ' + parseFloat(account.reward_steem_balance); }
-        if (parseFloat(account.reward_vesting_balance) > 0) { rewards_message = rewards_message + ' VESTS: ' + parseFloat(account.reward_vesting_balance); }
-
-        utils.log(rewards_message);
+          utils.log(rewards_message);
+        }
 
         // If there are liquid post rewards, withdraw them to the specified account
         if(parseFloat(account.reward_sbd_balance) > 0 && config.post_rewards_withdrawal_account && config.post_rewards_withdrawal_account != '') {
@@ -541,7 +542,7 @@ function processWithdrawals() {
     if(encrypt) {
       // Get list of unique withdrawal account names
       var account_names = withdrawals.map(w => w.to).filter((v, i, s) => s.indexOf(v) === i);
-      console.log(account_names);
+
       // Load account info to get memo keys for encryption
       steem.api.getAccounts(account_names, function (err, result) {
         if (result && !err) {
@@ -553,7 +554,7 @@ function processWithdrawals() {
               matches[j].memo_key = withdrawal_account.memo_key;
             }
           }
-          console.log(withdrawals);
+
           sendWithdrawals(withdrawals);
         } else
           utils.log('Error loading withdrawal accounts: ' + err);
@@ -643,3 +644,11 @@ function loadPrices() {
 }
 
 function getUsdValue(bid) { return bid.amount * ((bid.currency == 'SBD') ? sbd_price : steem_price); }
+
+function loadConfig() {
+  config = JSON.parse(fs.readFileSync("config.json"));
+
+  if (fs.existsSync('blacklist')) {
+    config.blacklist = fs.readFileSync("blacklist", "utf8").split('\n');
+  }
+}

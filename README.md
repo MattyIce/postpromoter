@@ -30,7 +30,6 @@ Then set the following options in config.json:
   "max_post_age": 144, // In hours, 144 hours = 6 days
   "allow_comments": true,
   "currencies_accepted": ["SBD", "STEEM"], // Which currencies to accept
-  "blacklist": ["account1", "account2"], // List of blacklisted accounts
   "refunds_enabled": true,
   "no_refund": ["bittrex", "poloniex", "openledger", "blocktrades", "minnowbooster"], // Don't refund transactions from these accounts!
   "promotion_content": "You got a {weight}% upvote from @{botname} courtesy of @{sender}!", // Change this to whatever you want the bot to post as a comment when it votes, or leave it out or blank for no comment
@@ -65,6 +64,15 @@ Then set the following options in config.json:
       "invalid_post_url": "Refund for invalid bid: {amount} - Invalid post URL in memo."
   }
 }
+```
+
+### Blacklist
+You can add a list of blacklisted users whose bids will not be accepted and who will not receive any refund by adding their steem account name to the "blacklist" file. The file should contain only one steem account name on each line and nothing else as in the following example:
+
+```
+blacklisted_account_1
+blacklisted_account_2
+blacklisted_account_3
 ```
 
 ## Run
