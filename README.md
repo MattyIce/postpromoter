@@ -15,14 +15,21 @@ $ mv config-example.json config.json
 Then set the following options in config.json:
 ```
 {
-  "rpc_node": "https://api.steemit.com", // Set the RPC node you would like to connect to (https://api.steemit.com is the default if this is not set)
+  "rpc_nodes": // Set the list of RPC nodes you would like to connect to (https://api.steemit.com is the default if this is not set). The software will automatically fail over to the next node on the list if the current one is having issues.
+  [
+    "https://api.steemit.com",
+    "https://rpc.buildteam.io",
+    "https://steemd.minnowsupportproject.org",
+    "https://steemd.privex.io",
+    "https://gtg.steem.house:8090"
+  ],
   "disabled_mode": false, // Set this to true to refund all funds sent to the bot
   "detailed_logging": false, // Whether or not detailed logging is enabled
   "account": "yourbotaccount",
   "memo_key": "your_private_memo_key"
   "posting_key": "your_private_posting_key",
   "active_key": "your_private_active_key",
-  "auto_claim_rewards" : true, // Set to false if you dont want to claim rewards automatical
+  "auto_claim_rewards" : true, // Set to false if you don't want to claim rewards automatically
   "post_rewards_withdrawal_account": "account_name", // Automatically withdraw any liquid post rewards to the specified account
   "min_bid": 0.1,
   "max_bid": 999,

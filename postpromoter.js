@@ -14,16 +14,17 @@ var last_withdrawal = null;
 var use_delegators = false;
 var steem_price = 1;  // This will get overridden with actual prices if a price_feed_url is specified in settings
 var sbd_price = 1;    // This will get overridden with actual prices if a price_feed_url is specified in settings
-var version = '1.7.6';
+var version = '1.8.0';
 
 // Load the settings from the config file
 loadConfig();
 
 // Connect to the specified RPC node
-var rpc_node = config.rpc_node ? config.rpc_node : 'https://api.steemit.com';
+var rpc_node = config.rpc_nodes ? config.rpc_nodes[0] : (config.rpc_node ? config.rpc_node : 'https://api.steemit.com');
 steem.api.setOptions({ transport: 'http', uri: rpc_node, url: rpc_node });
 
 utils.log("* START - Version: " + version + " *");
+utils.log("Connected to: " + rpc_node);
 
 // Load Steem global variables
 utils.updateSteemVariables();
@@ -111,7 +112,7 @@ function startProcess() {
       if (config.auto_withdrawal.frequency == 'daily')
         checkAutoWithdraw();
     } else
-      utils.log('Error loading bot account: ' + err);
+      logError('Error loading bot account: ' + err);
   });
 
   if (account && !isVoting) {
@@ -204,7 +205,11 @@ function sendVote(bid, retries, callback) {
       if (callback)
         callback();
     } else {
-      utils.log('Error sending vote for: @' + bid.author + '/' + bid.permlink + ', Error: ' + err);
+      logError('Error sending vote for: @' + bid.author + '/' + bid.permlink + ', Error: ' + err);
+
+      // If it failed twice, try failing over to a new node
+      if(retries == 1)
+        failover();
 
       // Try again one time on error
       if(retries < 2)
@@ -242,7 +247,7 @@ function sendComment(bid) {
       if (!err && result) {
         utils.log('Posted comment: ' + permlink);
       } else {
-        utils.log('Error posting comment: ' + permlink);
+        logError('Error posting comment: ' + permlink);
       }
     });
   }
@@ -267,7 +272,7 @@ function getTransactions() {
     first_load = false;
 
     if (err || !result) {
-      utils.log('Error loading account history: ' + err);
+      logError('Error loading account history: ' + err);
       return;
     }
 
@@ -361,7 +366,11 @@ function checkPost(memo, amount, currency, sender, retries) {
           refund(sender, amount, currency, 'invalid_post_url');
           return;
         } else {
-          utils.log('Error loading post: ' + memo + ', Error: ' + err);
+          logError('Error loading post: ' + memo + ', Error: ' + err);
+
+          // If it failed twice, try failing over to a new node
+          if(retries == 1)
+            failover();
 
           // Try again on error
           if(retries < 2)
@@ -422,7 +431,7 @@ function saveDelegators() {
 function refund(sender, amount, currency, reason, retries) {
   if(!retries)
     retries = 0;
-    
+
   // Make sure refunds are enabled and the sender isn't on the no-refund list (for exchanges and things like that).
   if (!config.refunds_enabled || sender == config.account || (config.no_refund && config.no_refund.indexOf(sender) >= 0)) {
     utils.log("Invalid bid - " + reason + ' NO REFUND');
@@ -443,14 +452,17 @@ function refund(sender, amount, currency, reason, retries) {
   // Issue the refund.
   steem.broadcast.transfer(config.active_key, config.account, sender, utils.format(amount, 3) + ' ' + currency, memo, function (err, response) {
     if (err) {
-      utils.log('Error sending refund to @' + sender + ' for: ' + amount + ' ' + currency + ', Error: ' + err);
+      logError('Error sending refund to @' + sender + ' for: ' + amount + ' ' + currency + ', Error: ' + err);
+
+      // If it failed twice, try failing over to a new node
+      if(retries == 1)
+        failover();
 
       // Try again one time on error
       if(retries < 2)
         setTimeout(function() { refund(sender, amount, currency, reason, retries + 1) }, 3000);
-      else {
+      else
         utils.log('============= Refund failed three times for: @' + sender + ' ===============');
-      }
     } else {
       utils.log('Refund of ' + amount + ' ' + currency + ' sent to @' + sender + ' for reason: ' + reason);
     }
@@ -587,7 +599,7 @@ function processWithdrawals() {
 
           sendWithdrawals(withdrawals);
         } else
-          utils.log('Error loading withdrawal accounts: ' + err);
+          logError('Error loading withdrawal accounts: ' + err);
       });
     } else
       sendWithdrawals(withdrawals);
@@ -623,11 +635,11 @@ function sendWithdrawal(withdrawal, retries, callback) {
   // Send the withdrawal amount to the specified account
   steem.broadcast.transfer(config.active_key, config.account, withdrawal.to, formatted_amount, memo, function (err, response) {
     if (err) {
-      utils.log('Error sending withdrawal transaction to: ' + withdrawal.to + ', Error: ' + err);
+      logError('Error sending withdrawal transaction to: ' + withdrawal.to + ', Error: ' + err);
 
       // Try again once if there is an error
       if(retries < 1)
-        sendWithdrawal(withdrawal, retries + 1, callback);
+        setTimeout(function() { sendWithdrawal(withdrawal, retries + 1, callback); }, 3000);
       else {
         utils.log('============= Withdrawal failed two times to: ' + withdrawal.to + ' for: ' + formatted_amount + ' ===============');
 
@@ -682,3 +694,37 @@ function loadConfig() {
     config.blacklist = fs.readFileSync("blacklist", "utf8").split('\n');
   }
 }
+
+function failover() {
+  if(config.rpc_nodes && config.rpc_nodes.length > 1) {
+    var cur_node_index = config.rpc_nodes.indexOf(steem.api.options.url) + 1;
+
+    if(cur_node_index == config.rpc_nodes.length)
+      cur_node_index = 0;
+
+    var rpc_node = config.rpc_nodes[cur_node_index];
+
+    steem.api.setOptions({ transport: 'http', uri: rpc_node, url: rpc_node });
+    utils.log('');
+    utils.log('***********************************************');
+    utils.log('Failing over to: ' + rpc_node);
+    utils.log('***********************************************');
+    utils.log('');
+  }
+}
+
+var error_count = 0;
+function logError(message) {
+  error_count++;
+  utils.log(message);
+}
+
+// Check if too many errors have happened in a 1-minute period and fail over to next rpc node
+function checkErrors() {
+  if(error_count >= 10)
+    failover();
+
+  // Reset the error counter
+  error_count = 0;
+}
+setInterval(checkErrors, 60 * 1000);

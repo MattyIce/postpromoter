@@ -1,5 +1,11 @@
 {
-  "rpc_node": "https://api.steemit.com",
+  "rpc_nodes": [
+    "https://api.steemit.com",
+    "https://rpc.buildteam.io",
+    "https://steemd.minnowsupportproject.org",
+    "https://steemd.privex.io",
+    "https://gtg.steem.house:8090"
+  ],
   "disabled_mode": false,
   "detailed_logging": false,
   "account": "your_bot_account_name",
