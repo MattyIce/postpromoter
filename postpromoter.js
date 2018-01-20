@@ -301,7 +301,7 @@ function getTransactions() {
               refund(op[1].from, amount, currency, 'above_max_bid');
             } else {
               // Bid amount is just right!
-              checkPost(op[1].memo, amount, currency, op[1].from);
+              checkPost(op[1].memo, amount, currency, op[1].from, 0);
             }
           } else if(use_delegators && op[0] == 'delegate_vesting_shares' && op[1].delegatee == account.name) {
             // If we are paying out to delegators, then update the list of delegators when new delegation transactions come in
@@ -419,7 +419,10 @@ function saveDelegators() {
     });
 }
 
-function refund(sender, amount, currency, reason) {
+function refund(sender, amount, currency, reason, retries) {
+  if(!retries)
+    retries = 0;
+    
   // Make sure refunds are enabled and the sender isn't on the no-refund list (for exchanges and things like that).
   if (!config.refunds_enabled || sender == config.account || (config.no_refund && config.no_refund.indexOf(sender) >= 0)) {
     utils.log("Invalid bid - " + reason + ' NO REFUND');
@@ -439,9 +442,16 @@ function refund(sender, amount, currency, reason) {
 
   // Issue the refund.
   steem.broadcast.transfer(config.active_key, config.account, sender, utils.format(amount, 3) + ' ' + currency, memo, function (err, response) {
-    if (err)
+    if (err) {
       utils.log('Error sending refund to @' + sender + ' for: ' + amount + ' ' + currency + ', Error: ' + err);
-    else {
+
+      // Try again one time on error
+      if(retries < 2)
+        setTimeout(function() { refund(sender, amount, currency, reason, retries + 1) }, 3000);
+      else {
+        utils.log('============= Refund failed three times for: @' + sender + ' ===============');
+      }
+    } else {
       utils.log('Refund of ' + amount + ' ' + currency + ' sent to @' + sender + ' for reason: ' + reason);
     }
   });
