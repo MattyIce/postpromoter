@@ -16,7 +16,7 @@
   "currencies_accepted": ["SBD", "STEEM"],
   "refunds_enabled": true,
   "no_refund": ["bittrex", "poloniex", "openledger", "blocktrades", "minnowbooster"],
-  "promotion_content": "You got a {weight}% upvote from @{botname} courtesy of @{sender}!",
+  "comment_location": "comment.md",
   "auto_withdrawal": {
     "active": true,
     "accounts": [

@@ -32,7 +32,7 @@ Then set the following options in config.json:
   "currencies_accepted": ["SBD", "STEEM"], // Which currencies to accept
   "refunds_enabled": true,
   "no_refund": ["bittrex", "poloniex", "openledger", "blocktrades", "minnowbooster"], // Don't refund transactions from these accounts!
-  "promotion_content": "You got a {weight}% upvote from @{botname} courtesy of @{sender}!", // Change this to whatever you want the bot to post as a comment when it votes, or leave it out or blank for no comment
+  "comment_location": "comment.md", // The location of a markdown file containing the comment that should be left after the bot votes on a post. Leave this null or blank for no comment.
   "auto_withdrawal": {
     "active": true, // Activate the auto withdrawal function (will withdraw all accepted currencies)
     "accounts": [	// List of accounts to receive daily withdrawals and the amount to send to each

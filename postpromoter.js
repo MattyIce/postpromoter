@@ -14,7 +14,7 @@ var last_withdrawal = null;
 var use_delegators = false;
 var steem_price = 1;  // This will get overridden with actual prices if a price_feed_url is specified in settings
 var sbd_price = 1;    // This will get overridden with actual prices if a price_feed_url is specified in settings
-var version = '1.7.4';
+var version = '1.7.6';
 
 // Load the settings from the config file
 loadConfig();
@@ -119,8 +119,8 @@ function startProcess() {
     var vp = utils.getVotingPower(account);
 
     if(config.detailed_logging) {
-      var bids_steem = outstanding_bids.reduce(function(t, b) { return t + ((b.currency == 'STEEM') ? b.amount : 0); }, 0);
-      var bids_sbd = outstanding_bids.reduce(function(t, b) { return t + ((b.currency == 'SBD') ? b.amount : 0); }, 0);
+      var bids_steem = utils.format(outstanding_bids.reduce(function(t, b) { return t + ((b.currency == 'STEEM') ? b.amount : 0); }, 0), 3);
+      var bids_sbd = utils.format(outstanding_bids.reduce(function(t, b) { return t + ((b.currency == 'SBD') ? b.amount : 0); }, 0), 3);
       utils.log('Voting Power: ' + utils.format(vp / 100) + '% | Time until next round: ' + utils.toTimer(utils.timeTilFullPower(vp)) + ' | Bids: ' + outstanding_bids.length + ' | ' + bids_sbd + ' SBD | ' + bids_steem + ' STEEM');
     }
 
@@ -220,14 +220,22 @@ function sendVote(bid, retries, callback) {
 }
 
 function sendComment(bid) {
+  var content = null;
+
+  if(config.comment_location && config.comment_location != '') {
+    content = fs.readFileSync(config.comment_location, "utf8");
+  } else if (config.promotion_content && config.promotion_content != '') {
+    content = config.promotion_content;
+  }
+
   // If promotion content is specified in the config then use it to comment on the upvoted post
-  if (config.promotion_content && config.promotion_content != '') {
+  if (content && content != '') {
 
     // Generate the comment permlink via steemit standard convention
     var permlink = 're-' + bid.author.replace(/\./g, '') + '-' + bid.permlink + '-' + new Date().toISOString().replace(/-|:|\./g, '').toLowerCase();
 
     // Replace variables in the promotion content
-    var content = config.promotion_content.replace(/\{weight\}/g, utils.format(bid.weight / 100)).replace(/\{botname\}/g, config.account).replace(/\{sender\}/g, bid.sender);
+    content = content.replace(/\{weight\}/g, utils.format(bid.weight / 100)).replace(/\{botname\}/g, config.account).replace(/\{sender\}/g, bid.sender);
 
     // Broadcast the comment
     steem.broadcast.comment(config.posting_key, bid.author, bid.permlink, account.name, permlink, permlink, content, '{"app":"postpromoter/' + version + '"}', function (err, result) {
@@ -317,7 +325,7 @@ function getTransactions() {
   });
 }
 
-function checkPost(memo, amount, currency, sender) {
+function checkPost(memo, amount, currency, sender, retries) {
     // Parse the author and permlink from the memo URL
     var permLink = memo.substr(memo.lastIndexOf('/') + 1);
     var author = memo.substring(memo.lastIndexOf('@') + 1, memo.lastIndexOf('/'));
@@ -348,10 +356,22 @@ function checkPost(memo, amount, currency, sender) {
                 refund(sender, amount, currency, ((votes.length > 0) ? 'already_voted' : 'max_age'));
                 return;
             }
+        } else if(result && result.id == 0) {
+          // Invalid memo
+          refund(sender, amount, currency, 'invalid_post_url');
+          return;
         } else {
-            // Invalid memo
+          utils.log('Error loading post: ' + memo + ', Error: ' + err);
+
+          // Try again on error
+          if(retries < 2)
+            setTimeout(function() { checkPost(memo, amount, currency, sender, retries + 1); }, 3000);
+          else {
+            utils.log('============= Load post failed three times for: ' + memo + ' ===============');
+
             refund(sender, amount, currency, 'invalid_post_url');
             return;
+          }
         }
 
         // Check if there is already a bid for this post in the current round
