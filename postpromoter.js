@@ -14,7 +14,7 @@ var last_withdrawal = null;
 var use_delegators = false;
 var steem_price = 1;  // This will get overridden with actual prices if a price_feed_url is specified in settings
 var sbd_price = 1;    // This will get overridden with actual prices if a price_feed_url is specified in settings
-var version = '1.8.0';
+var version = '1.8.1';
 
 // Load the settings from the config file
 loadConfig();
@@ -339,6 +339,20 @@ function checkPost(memo, amount, currency, sender, retries) {
     if(config.blacklist && config.blacklist.indexOf(author) >= 0)
     {
       utils.log('Invalid Bid - @' + author + ' is on the blacklist!');
+
+      // Refund the bid only if blacklist_refunds are enabled in config
+      if (config.refund_blacklist)
+        refund(sender, amount, currency, 'blacklist_refund', 0);
+      else {
+        // Otherwise just send a 0.001 transaction with blacklist memo
+        if (config.transfer_memos['blacklist_no_refund'] && config.transfer_memos['blacklist_no_refund'] != '')
+          refund(sender, 0.001, currency, 'blacklist_no_refund', 0);
+
+        // If a blacklist donation account is specified then send funds from blacklisted users there
+        if (config.blacklist_donation_account && config.blacklist_donation_account != '')
+          refund(config.blacklist_donation_account, amount, currency, 'blacklist_donation', 0);
+      }
+
       return;
     }
 
@@ -402,7 +416,25 @@ function checkPost(memo, amount, currency, sender, retries) {
           utils.log('Valid Bid - Amount: ' + amount + ' ' + currency + ', Title: ' + result.title);
           outstanding_bids.push({ amount: amount, currency: currency, sender: sender, author: result.author, permlink: result.permlink, url: result.url });
         }
+
+        // If a witness_vote transfer memo is set, check if the sender votes for the bot owner as witness and send them a message if not
+        if (config.transfer_memos['witness_vote'] && config.transfer_memos['witness_vote'] != '') {
+          checkWitnessVote(sender, currency);
+        }
     });
+}
+
+function checkWitnessVote(sender, currency) {
+  if(!config.owner_account || config.owner_account == '')
+    return;
+
+  steem.api.getAccounts([sender], function (err, result) {
+    if (result && !err) {
+      if(result[0].witness_votes.indexOf(config.owner_account) < 0)
+        refund(sender, 0.001, currency, 'witness_vote', 0);
+    } else
+      logError('Error loading sender account to check witness vote: ' + err);
+  });
 }
 
 function saveState() {
@@ -690,8 +722,10 @@ function getUsdValue(bid) { return bid.amount * ((bid.currency == 'SBD') ? sbd_p
 function loadConfig() {
   config = JSON.parse(fs.readFileSync("config.json"));
 
-  if (fs.existsSync('blacklist')) {
-    config.blacklist = fs.readFileSync("blacklist", "utf8").split('\n');
+  var location = (config.blacklist_location && config.blacklist_location != '') ? config.blacklist_location : 'blacklist';
+
+  if (fs.existsSync(location)) {
+    config.blacklist = fs.readFileSync(location, "utf8").replace(/[\r]/g, '').split('\n');
   }
 }
 

@@ -8,6 +8,7 @@
   ],
   "disabled_mode": false,
   "detailed_logging": false,
+  "owner_account": "yabapmatt",
   "account": "your_bot_account_name",
   "memo_key": "your_private_memo_key",
   "posting_key": "your_private_posting_key",
@@ -23,6 +24,9 @@
   "refunds_enabled": true,
   "no_refund": ["bittrex", "poloniex", "openledger", "blocktrades", "minnowbooster"],
   "comment_location": "comment.md",
+  "blacklist_location": "blacklist",
+  "refund_blacklist": true,
+  "blacklist_donation_account": "steemcleaners",
   "auto_withdrawal": {
     "active": true,
     "accounts": [
@@ -44,13 +48,16 @@
     "port": 3000
   },
   "transfer_memos": {
-      "bot_disabled": "Refund for invalid bid: {amount} - The bot is currently disabled.",
-      "below_min_bid": "Refund for invalid bid: {amount} - Min bid amount is {min_bid}.",
-      "above_max_bid": "Refund for invalid bid: {amount} - Max bid amount is {max_bid}.",
-      "invalid_currency": "Refund for invalid bid: {amount} - Bids in {currency} are not accepted.",
-      "no_comments": "Refund for invalid bid: {amount} - Bids not allowed on comments.",
-      "already_voted": "Refund for invalid bid: {amount} - Bot already voted on this post.",
-      "max_age": "Refund for invalid bid: {amount} - Posts cannot be older than {max_age}.",
-      "invalid_post_url": "Refund for invalid bid: {amount} - Invalid post URL in memo."
+    "bot_disabled": "Refund for invalid bid: {amount} - The bot is currently disabled.",
+    "below_min_bid": "Refund for invalid bid: {amount} - Min bid amount is {min_bid}.",
+    "above_max_bid": "Refund for invalid bid: {amount} - Max bid amount is {max_bid}.",
+    "invalid_currency": "Refund for invalid bid: {amount} - Bids in {currency} are not accepted.",
+    "no_comments": "Refund for invalid bid: {amount} - Bids not allowed on comments.",
+    "already_voted": "Refund for invalid bid: {amount} - Bot already voted on this post.",
+    "max_age": "Refund for invalid bid: {amount} - Posts cannot be older than {max_age}.",
+    "invalid_post_url": "Refund for invalid bid: {amount} - Invalid post URL in memo.",
+    "blacklist_refund": "Refund for invalid bid: {amount} - The author of this post is on the blacklist.",
+    "blacklist_no_refund": "Bid is invalid - The author of this post is on the blacklist.",
+    "blacklist_donation": "Bid from blacklisted user sent as a donation. Thank you!"
   }
 }

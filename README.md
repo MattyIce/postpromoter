@@ -25,6 +25,7 @@ Then set the following options in config.json:
   ],
   "disabled_mode": false, // Set this to true to refund all funds sent to the bot
   "detailed_logging": false, // Whether or not detailed logging is enabled
+  "owner_account": "bot_owner_account", // The name of the bot owner account (can be left null or blank)
   "account": "yourbotaccount",
   "memo_key": "your_private_memo_key"
   "posting_key": "your_private_posting_key",
@@ -40,6 +41,9 @@ Then set the following options in config.json:
   "refunds_enabled": true,
   "no_refund": ["bittrex", "poloniex", "openledger", "blocktrades", "minnowbooster"], // Don't refund transactions from these accounts!
   "comment_location": "comment.md", // The location of a markdown file containing the comment that should be left after the bot votes on a post. Leave this null or blank for no comment.
+  "blacklist_location": "blacklist", // The location of the blacklist file containing one blacklisted Steem account name per line
+  "refund_blacklist": true,	// Whether or not to refund blacklisted users' bids
+  "blacklist_donation_account": "steemcleaners", // If "refund_blacklist" is false, then this will send all bids from blacklisted users to the specified account as a donation
   "auto_withdrawal": {
     "active": true, // Activate the auto withdrawal function (will withdraw all accepted currencies)
     "accounts": [	// List of accounts to receive daily withdrawals and the amount to send to each
@@ -61,14 +65,17 @@ Then set the following options in config.json:
     "port": 3000
   },
   "transfer_memos": {	// Memos sent with transfer for bid refunds
-      "bot_disabled": "Refund for invalid bid: {amount} - The bot is currently disabled.",
-      "below_min_bid": "Refund for invalid bid: {amount} - Min bid amount is {min_bid}.",
-      "above_max_bid": "Refund for invalid bid: {amount} - Max bid amount is {max_bid}.",
-      "invalid_currency": "Refund for invalid bid: {amount} - Bids in {currency} are not accepted.",
-      "no_comments": "Refund for invalid bid: {amount} - Bids not allowed on comments.",
-      "already_voted": "Refund for invalid bid: {amount} - Bot already voted on this post.",
-      "max_age": "Refund for invalid bid: {amount} - Posts cannot be older than {max_age}.",
-      "invalid_post_url": "Refund for invalid bid: {amount} - Invalid post URL in memo."
+    "bot_disabled": "Refund for invalid bid: {amount} - The bot is currently disabled.",
+    "below_min_bid": "Refund for invalid bid: {amount} - Min bid amount is {min_bid}.",
+    "above_max_bid": "Refund for invalid bid: {amount} - Max bid amount is {max_bid}.",
+    "invalid_currency": "Refund for invalid bid: {amount} - Bids in {currency} are not accepted.",
+    "no_comments": "Refund for invalid bid: {amount} - Bids not allowed on comments.",
+    "already_voted": "Refund for invalid bid: {amount} - Bot already voted on this post.",
+    "max_age": "Refund for invalid bid: {amount} - Posts cannot be older than {max_age}.",
+    "invalid_post_url": "Refund for invalid bid: {amount} - Invalid post URL in memo.",
+    "blacklist_refund": "Refund for invalid bid: {amount} - The author of this post is on the blacklist.",
+    "blacklist_no_refund": "Bid is invalid - The author of this post is on the blacklist.",
+    "blacklist_donation": "Bid from blacklisted user sent as a donation. Thank you!"
   }
 }
 ```
