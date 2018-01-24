@@ -349,6 +349,11 @@ function checkPost(memo, amount, currency, sender, retries) {
     var permLink = memo.substr(memo.lastIndexOf('/') + 1);
     var author = memo.substring(memo.lastIndexOf('@') + 1, memo.lastIndexOf('/'));
 
+    if (author == '' || permLink == '') {
+      refund(sender, amount, currency, 'invalid_post_url');
+      return;
+    }
+
     // Make sure the author isn't on the blacklist!
     if(config.blacklist && config.blacklist.indexOf(author) >= 0)
     {
