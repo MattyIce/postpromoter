@@ -129,23 +129,29 @@ function startProcess() {
     if (vp >= 10000 && outstanding_bids.length > 0) {
 
       // Don't process any bids while we are voting due to race condition (they will be processed when voting is done).
-      isVoting = first_load = true;
+      isVoting = true;
 
-      // Make a copy of the list of outstanding bids and vote on them
-      startVoting(outstanding_bids.slice().reverse());
+      // Add a little delay to get last-minute bids in
+      setTimeout(function () {
+        getTransactions(function () {
+          first_load = true;
 
-      // Save the last round of bids for use in API call
-      last_round = outstanding_bids.slice();
+          // Make a copy of the list of outstanding bids and vote on them
+          startVoting(outstanding_bids.slice().reverse());
 
-      // Reset the list of outstanding bids for the next round
-      outstanding_bids = [];
+          // Save the last round of bids for use in API call
+          last_round = outstanding_bids.slice();
 
-      // Send out earnings if frequency is set to every round
-      if (config.auto_withdrawal.frequency == 'round_end')
-        processWithdrawals();
-    } else {
+          // Reset the list of outstanding bids for the next round
+          outstanding_bids = [];
+
+          // Send out earnings if frequency is set to every round
+          if (config.auto_withdrawal.frequency == 'round_end')
+            processWithdrawals();
+        });
+      }, 30 * 1000);
+    } else
       getTransactions();
-    }
 
     // Save the state of the bot to disk.
     saveState();
@@ -253,7 +259,7 @@ function sendComment(bid) {
   }
 }
 
-function getTransactions() {
+function getTransactions(callback) {
   var num_trans = 50;
 
   // If this is the first time the bot is ever being run, start with just the most recent transaction
@@ -273,10 +279,15 @@ function getTransactions() {
 
     if (err || !result) {
       logError('Error loading account history: ' + err);
+
+      if (callback)
+        callback();
+
       return;
     }
 
-    result.forEach(function(trans) {
+    for (var i = 0; i < result.length; i++) {
+      var trans = result[i];
       var op = trans[1].op;
 
         // Check that this is a new transaction that we haven't processed already
@@ -326,7 +337,10 @@ function getTransactions() {
           // Save the ID of the last transaction that was processed.
           last_trans = trans[0];
         }
-    });
+    }
+
+    if (callback)
+      callback();
   });
 }
 
