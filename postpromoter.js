@@ -347,7 +347,17 @@ function getTransactions(callback) {
 function checkPost(memo, amount, currency, sender, retries) {
     // Parse the author and permlink from the memo URL
     var permLink = memo.substr(memo.lastIndexOf('/') + 1);
-    var author = memo.substring(memo.lastIndexOf('@') + 1, memo.lastIndexOf('/'));
+    var site = memo.substring(memo.indexOf('://')+3,memo.indexOf('/', memo.indexOf('://')+3));
+    switch(site) {
+      case 'd.tube':
+          var author = memo.substring(memo.indexOf("/v/")+3,memo.lastIndexOf('/'));
+          break;
+      case 'dmania.lol':
+          var author = memo.substring(memo.indexOf("/post/")+6,memo.lastIndexOf('/'));
+          break;
+      default:  
+          var author = memo.substring(memo.lastIndexOf('@') + 1, memo.lastIndexOf('/'));
+    }
 
     if (author == '' || permLink == '') {
       refund(sender, amount, currency, 'invalid_post_url');
