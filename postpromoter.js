@@ -14,7 +14,7 @@ var last_withdrawal = null;
 var use_delegators = false;
 var steem_price = 1;  // This will get overridden with actual prices if a price_feed_url is specified in settings
 var sbd_price = 1;    // This will get overridden with actual prices if a price_feed_url is specified in settings
-var version = '1.8.1';
+var version = '1.8.2';
 
 // Load the settings from the config file
 loadConfig();
@@ -213,11 +213,7 @@ function sendVote(bid, retries, callback) {
     } else {
       logError('Error sending vote for: @' + bid.author + '/' + bid.permlink + ', Error: ' + err);
 
-      // If it failed twice, try failing over to a new node
-      if(retries == 1)
-        failover();
-
-      // Try again one time on error
+      // Try again on error
       if(retries < 2)
         setTimeout(function() { sendVote(bid, retries + 1, callback); }, 3000);
       else {
@@ -379,7 +375,7 @@ function checkPost(memo, amount, currency, sender, retries) {
 
         // If a blacklist donation account is specified then send funds from blacklisted users there
         if (config.blacklist_donation_account && config.blacklist_donation_account != '')
-          refund(config.blacklist_donation_account, amount, currency, 'blacklist_donation', 0);
+          refund(config.blacklist_donation_account, amount - 0.001, currency, 'blacklist_donation', 0);
       }
 
       return;
@@ -410,10 +406,6 @@ function checkPost(memo, amount, currency, sender, retries) {
           return;
         } else {
           logError('Error loading post: ' + memo + ', Error: ' + err);
-
-          // If it failed twice, try failing over to a new node
-          if(retries == 1)
-            failover();
 
           // Try again on error
           if(retries < 2)
@@ -515,13 +507,9 @@ function refund(sender, amount, currency, reason, retries) {
     if (err) {
       logError('Error sending refund to @' + sender + ' for: ' + amount + ' ' + currency + ', Error: ' + err);
 
-      // If it failed twice, try failing over to a new node
-      if(retries == 1)
-        failover();
-
-      // Try again one time on error
+      // Try again on error
       if(retries < 2)
-        setTimeout(function() { refund(sender, amount, currency, reason, retries + 1) }, 3000);
+        setTimeout(function() { refund(sender, amount, currency, reason, retries + 1) }, (Math.floor(Math.random() * 10) + 3) * 1000);
       else
         utils.log('============= Refund failed three times for: @' + sender + ' ===============');
     } else {
@@ -778,7 +766,11 @@ function failover() {
 
 var error_count = 0;
 function logError(message) {
-  error_count++;
+  // Don't count assert exceptions for node failover
+  if (message.indexOf('assert_exception') < 0 && message.indexOf('ERR_ASSERTION') < 0)
+    error_count++;
+
+  utils.log('Error Count: ' + error_count);
   utils.log(message);
 }
 
