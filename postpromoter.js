@@ -737,11 +737,30 @@ function loadPrices() {
 function getUsdValue(bid) { return bid.amount * ((bid.currency == 'SBD') ? sbd_price : steem_price); }
 
 function loadConfig() {
+  // Save the existing blacklist so it doesn't get overwritten
+  var blacklist = [];
+  if (config && config.blacklist)
+    blacklist = config.blacklist;
+
   config = JSON.parse(fs.readFileSync("config.json"));
+
+  // Restore the existing blacklist in case there's an issue loading it again
+  config.blacklist = blacklist;
 
   var location = (config.blacklist_location && config.blacklist_location != '') ? config.blacklist_location : 'blacklist';
 
-  if (fs.existsSync(location)) {
+  if (location.startsWith('http://') || location.startsWith('https://')) {
+    // Require the "request" library for making HTTP requests
+    var request = require("request");
+
+    request.get(location, function (e, r, data) {
+      try {
+        config.blacklist = data.replace(/[\r]/g, '').split('\n');
+      } catch (err) {
+        utils.log('Error loading blacklist from: ' + location + ', Error: ' + err);
+      }
+    });
+  } else if (fs.existsSync(location)) {
     config.blacklist = fs.readFileSync(location, "utf8").replace(/[\r]/g, '').split('\n');
   }
 }
