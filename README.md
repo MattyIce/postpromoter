@@ -40,6 +40,7 @@ Then set the following options in config.json:
   "currencies_accepted": ["SBD", "STEEM"], // Which currencies to accept
   "refunds_enabled": true,
   "no_refund": ["bittrex", "poloniex", "openledger", "blocktrades", "minnowbooster"], // Don't refund transactions from these accounts!
+  "flag_signal_accounts": ["spaminator", "cheetah", "steemcleaners", "mack-bot", "blacklist-a"], // If any accounts on this list has flagged the post at the time the bid comes in it will be treated as blacklisted
   "comment_location": "comment.md", // The location of a markdown file containing the comment that should be left after the bot votes on a post. Leave this null or blank for no comment.
   "blacklist_location": "blacklist", // The location of the blacklist file containing one blacklisted Steem account name per line
   "refund_blacklist": true,	// Whether or not to refund blacklisted users' bids
@@ -75,19 +76,23 @@ Then set the following options in config.json:
     "invalid_post_url": "Refund for invalid bid: {amount} - Invalid post URL in memo.",
     "blacklist_refund": "Refund for invalid bid: {amount} - The author of this post is on the blacklist.",
     "blacklist_no_refund": "Bid is invalid - The author of this post is on the blacklist.",
-    "blacklist_donation": "Bid from blacklisted user sent as a donation. Thank you!"
+    "blacklist_donation": "Bid from blacklisted user sent as a donation. Thank you!",
+    "flag_refund": "Refund for invalid bid: {amount} - This post has been flagged by one or more spam / abuse indicator accounts.",
+    "flag_no_refund": "Bid is invalid - This post has been flagged by one or more spam / abuse indicator accounts."
   }
 }
 ```
 
 ### Blacklist
-You can add a list of blacklisted users whose bids will not be accepted and who will not receive any refund by adding their steem account name to the "blacklist" file. The file should contain only one steem account name on each line and nothing else as in the following example:
+You can add a list of blacklisted users whose bids will not be accepted and who will not receive any refund by adding their steem account name to the "blacklist" file. Set the "blacklist_location" property to point to the location of your blacklist file, or you can use a URL to point to a shared blacklist on the internet. The file should contain only one steem account name on each line and nothing else as in the following example:
 
 ```
 blacklisted_account_1
 blacklisted_account_2
 blacklisted_account_3
 ```
+
+Additionally you can add a list of "flag_signal_accounts" which means that if any accounts on that list have flagged the post at the time the bid is sent then the bot will treat it as blacklisted.
 
 ## Run
 ```

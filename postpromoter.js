@@ -14,7 +14,7 @@ var last_withdrawal = null;
 var use_delegators = false;
 var steem_price = 1;  // This will get overridden with actual prices if a price_feed_url is specified in settings
 var sbd_price = 1;    // This will get overridden with actual prices if a price_feed_url is specified in settings
-var version = '1.8.2';
+var version = '1.8.3';
 
 // Load the settings from the config file
 loadConfig();
@@ -351,7 +351,7 @@ function checkPost(memo, amount, currency, sender, retries) {
       case 'dmania.lol':
           var author = memo.substring(memo.indexOf("/post/")+6,memo.lastIndexOf('/'));
           break;
-      default:  
+      default:
           var author = memo.substring(memo.lastIndexOf('@') + 1, memo.lastIndexOf('/'));
     }
 
@@ -363,21 +363,7 @@ function checkPost(memo, amount, currency, sender, retries) {
     // Make sure the author isn't on the blacklist!
     if(config.blacklist && config.blacklist.indexOf(author) >= 0)
     {
-      utils.log('Invalid Bid - @' + author + ' is on the blacklist!');
-
-      // Refund the bid only if blacklist_refunds are enabled in config
-      if (config.refund_blacklist)
-        refund(sender, amount, currency, 'blacklist_refund', 0);
-      else {
-        // Otherwise just send a 0.001 transaction with blacklist memo
-        if (config.transfer_memos['blacklist_no_refund'] && config.transfer_memos['blacklist_no_refund'] != '')
-          refund(sender, 0.001, currency, 'blacklist_no_refund', 0);
-
-        // If a blacklist donation account is specified then send funds from blacklisted users there
-        if (config.blacklist_donation_account && config.blacklist_donation_account != '')
-          refund(config.blacklist_donation_account, amount - 0.001, currency, 'blacklist_donation', 0);
-      }
-
+      handleBlacklist(author, sender, amount, currency);
       return;
     }
 
@@ -399,6 +385,16 @@ function checkPost(memo, amount, currency, sender, retries) {
                 // This post is already voted on by this bot or the post is too old to be voted on
                 refund(sender, amount, currency, ((votes.length > 0) ? 'already_voted' : 'max_age'));
                 return;
+            }
+
+            // Check if this post has been flagged by any flag signal accounts
+            if(config.flag_signal_accounts){
+              var flags = result.active_votes.filter(function(v) { return v.percent < 0 && config.flag_signal_accounts.indexOf(v.voter) >= 0; });
+
+              if(flags.length > 0) {
+                handleFlag(sender, amount, currency);
+                return;
+              }
             }
         } else if(result && result.id == 0) {
           // Invalid memo
@@ -443,6 +439,40 @@ function checkPost(memo, amount, currency, sender, retries) {
           checkWitnessVote(sender, currency);
         }
     });
+}
+
+function handleBlacklist(author, sender, amount, currency) {
+  utils.log('Invalid Bid - @' + author + ' is on the blacklist!');
+
+  // Refund the bid only if blacklist_refunds are enabled in config
+  if (config.refund_blacklist)
+    refund(sender, amount, currency, 'blacklist_refund', 0);
+  else {
+    // Otherwise just send a 0.001 transaction with blacklist memo
+    if (config.transfer_memos['blacklist_no_refund'] && config.transfer_memos['blacklist_no_refund'] != '')
+      refund(sender, 0.001, currency, 'blacklist_no_refund', 0);
+
+    // If a blacklist donation account is specified then send funds from blacklisted users there
+    if (config.blacklist_donation_account && config.blacklist_donation_account != '')
+      refund(config.blacklist_donation_account, amount - 0.001, currency, 'blacklist_donation', 0);
+  }
+}
+
+function handleFlag(sender, amount, currency) {
+  utils.log('Invalid Bid - This post has been flagged by one or more spam / abuse indicator accounts.');
+
+  // Refund the bid only if blacklist_refunds are enabled in config
+  if (config.refund_blacklist)
+    refund(sender, amount, currency, 'flag_refund', 0);
+  else {
+    // Otherwise just send a 0.001 transaction with blacklist memo
+    if (config.transfer_memos['flag_no_refund'] && config.transfer_memos['flag_no_refund'] != '')
+      refund(sender, 0.001, currency, 'flag_no_refund', 0);
+
+    // If a blacklist donation account is specified then send funds from blacklisted users there
+    if (config.blacklist_donation_account && config.blacklist_donation_account != '')
+      refund(config.blacklist_donation_account, amount - 0.001, currency, 'blacklist_donation', 0);
+  }
 }
 
 function checkWitnessVote(sender, currency) {
