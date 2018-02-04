@@ -436,7 +436,7 @@ function checkPost(memo, amount, currency, sender, retries) {
 
         // If a witness_vote transfer memo is set, check if the sender votes for the bot owner as witness and send them a message if not
         if (config.transfer_memos['witness_vote'] && config.transfer_memos['witness_vote'] != '') {
-          checkWitnessVote(sender, currency);
+          checkWitnessVote(sender, sender, currency);
         }
     });
 }
@@ -475,12 +475,17 @@ function handleFlag(sender, amount, currency) {
   }
 }
 
-function checkWitnessVote(sender, currency) {
+function checkWitnessVote(sender, voter, currency) {
   if(!config.owner_account || config.owner_account == '')
     return;
 
-  steem.api.getAccounts([sender], function (err, result) {
+  steem.api.getAccounts([voter], function (err, result) {
     if (result && !err) {
+      if (result[0].proxy && result[0].proxy != '') {
+        checkWitnessVote(sender, result[0].proxy, currency);
+        return;
+      }
+
       if(result[0].witness_votes.indexOf(config.owner_account) < 0)
         refund(sender, 0.001, currency, 'witness_vote', 0);
     } else
