@@ -14,7 +14,7 @@ var last_withdrawal = null;
 var use_delegators = false;
 var steem_price = 1;  // This will get overridden with actual prices if a price_feed_url is specified in settings
 var sbd_price = 1;    // This will get overridden with actual prices if a price_feed_url is specified in settings
-var version = '1.8.3';
+var version = '1.8.4';
 
 // Load the settings from the config file
 loadConfig();
@@ -374,6 +374,15 @@ function checkPost(memo, amount, currency, sender, retries) {
             if(!config.allow_comments && (result.parent_author != null && result.parent_author != '')) {
               refund(sender, amount, currency, 'no_comments');
               return;
+            }
+
+            // Check if any tags on this post are blacklisted in the settings
+            if (config.blacklisted_tags && config.blacklisted_tags.length > 0 && result.json_metadata && result.json_metadata != '') {
+              var tags = JSON.parse(result.json_metadata).tags;
+
+              if (tags && tags.find(t => config.blacklisted_tags.indexOf(t))) {
+                // TODO: send refund
+              }
             }
 
             var created = new Date(result.created + 'Z');
