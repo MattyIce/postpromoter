@@ -39,6 +39,7 @@ Then set the following options in config.json:
   "allow_comments": true,
   "currencies_accepted": ["SBD", "STEEM"], // Which currencies to accept
   "refunds_enabled": true,
+  "min_refund_amount": 0.002, // This will prevent refunds for transfer memos
   "no_refund": ["bittrex", "poloniex", "openledger", "blocktrades", "minnowbooster"], // Don't refund transactions from these accounts!
   "flag_signal_accounts": ["spaminator", "cheetah", "steemcleaners", "mack-bot", "blacklist-a"], // If any accounts on this list has flagged the post at the time the bid comes in it will be treated as blacklisted
   "comment_location": "comment.md", // The location of a markdown file containing the comment that should be left after the bot votes on a post. Leave this null or blank for no comment.

@@ -306,8 +306,12 @@ function getTransactions(callback) {
               // Sent an unsupported currency
               refund(op[1].from, amount, currency, 'invalid_currency');
             } else if(amount < min_bid) {
-              // Bid amount is too low
-              refund(op[1].from, amount, currency, 'below_min_bid');
+              // Bid amount is too low (make sure it's above the min_refund_amount setting)
+              if(!config.min_refund_amount || amount >= config.min_refund_amount)
+                refund(op[1].from, amount, currency, 'below_min_bid');
+              else {
+                utils.log('Invalid bid - below min bid amount and too small to refund.');
+              }
             } else if (amount > max_bid) {
               // Bid amount is too high
               refund(op[1].from, amount, currency, 'above_max_bid');
