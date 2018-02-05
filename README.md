@@ -45,6 +45,7 @@ Then set the following options in config.json:
   "blacklist_location": "blacklist", // The location of the blacklist file containing one blacklisted Steem account name per line
   "refund_blacklist": true,	// Whether or not to refund blacklisted users' bids
   "blacklist_donation_account": "steemcleaners", // If "refund_blacklist" is false, then this will send all bids from blacklisted users to the specified account as a donation
+  "blacklisted_tags": ["nsfw", "other-tag"], // List of post tags that are not allowed by the bot. Bids for posts with one or more tags in this list will be refunded
   "auto_withdrawal": {
     "active": true, // Activate the auto withdrawal function (will withdraw all accepted currencies)
     "accounts": [	// List of accounts to receive daily withdrawals and the amount to send to each
@@ -78,7 +79,8 @@ Then set the following options in config.json:
     "blacklist_no_refund": "Bid is invalid - The author of this post is on the blacklist.",
     "blacklist_donation": "Bid from blacklisted user sent as a donation. Thank you!",
     "flag_refund": "Refund for invalid bid: {amount} - This post has been flagged by one or more spam / abuse indicator accounts.",
-    "flag_no_refund": "Bid is invalid - This post has been flagged by one or more spam / abuse indicator accounts."
+    "flag_no_refund": "Bid is invalid - This post has been flagged by one or more spam / abuse indicator accounts.",
+    "blacklist_tag": "Bid is invalid - This post contains the [{tag}] tag which is not allowed by this bot."
   }
 }
 ```
@@ -98,6 +100,8 @@ Additionally you can add a list of "flag_signal_accounts" which means that if an
 ```
 $ nodejs postpromoter.js
 ```
+
+This will run the process in the foreground which is not recommended. We recommend using a tool such as [PM2](http://pm2.keymetrics.io/) to run the process in the background as well as providing many other great features.
 
 ## API Setup
 If you would like to use the API functionality set the "api.enabled" setting to "true" and choose a port. You can test if it is working locally by running:

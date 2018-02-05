@@ -28,6 +28,7 @@
   "blacklist_location": "blacklist",
   "refund_blacklist": false,
   "blacklist_donation_account": "steemcleaners",
+  "blacklisted_tags": ["nsfw"],
   "auto_withdrawal": {
     "active": true,
     "accounts": [
@@ -61,6 +62,7 @@
     "blacklist_no_refund": "Bid is invalid - The author of this post is on the blacklist.",
     "blacklist_donation": "Bid from blacklisted/flagged user sent as a donation. Thank you!",
     "flag_refund": "Refund for invalid bid: {amount} - This post has been flagged by one or more spam / abuse indicator accounts.",
-    "flag_no_refund": "Bid is invalid - This post has been flagged by one or more spam / abuse indicator accounts."
+    "flag_no_refund": "Bid is invalid - This post has been flagged by one or more spam / abuse indicator accounts.",
+    "blacklist_tag": "Bid is invalid - This post contains the [{tag}] tag which is not allowed by this bot."
   }
 }

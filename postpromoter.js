@@ -380,8 +380,13 @@ function checkPost(memo, amount, currency, sender, retries) {
             if (config.blacklisted_tags && config.blacklisted_tags.length > 0 && result.json_metadata && result.json_metadata != '') {
               var tags = JSON.parse(result.json_metadata).tags;
 
-              if (tags && tags.find(t => config.blacklisted_tags.indexOf(t))) {
-                // TODO: send refund
+              if (tags && tags.length > 0) {
+                var tag = tags.find(t => config.blacklisted_tags.indexOf(t) >= 0);
+
+                if(tag) {
+                  refund(sender, amount, currency, 'blacklist_tag', 0, tag);
+                  return;
+                }
               }
             }
 
@@ -525,7 +530,7 @@ function saveDelegators() {
     });
 }
 
-function refund(sender, amount, currency, reason, retries) {
+function refund(sender, amount, currency, reason, retries, data) {
   if(!retries)
     retries = 0;
 
@@ -541,6 +546,7 @@ function refund(sender, amount, currency, reason, retries) {
   memo = memo.replace(/{currency}/g, currency);
   memo = memo.replace(/{min_bid}/g, config.min_bid);
   memo = memo.replace(/{max_bid}/g, config.max_bid);
+  memo = memo.replace(/{tag}/g, data);
 
   var days = Math.floor(config.max_post_age / 24);
   var hours = (config.max_post_age % 24);
@@ -553,7 +559,7 @@ function refund(sender, amount, currency, reason, retries) {
 
       // Try again on error
       if(retries < 2)
-        setTimeout(function() { refund(sender, amount, currency, reason, retries + 1) }, (Math.floor(Math.random() * 10) + 3) * 1000);
+        setTimeout(function() { refund(sender, amount, currency, reason, retries + 1, data) }, (Math.floor(Math.random() * 10) + 3) * 1000);
       else
         utils.log('============= Refund failed three times for: @' + sender + ' ===============');
     } else {
