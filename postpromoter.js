@@ -550,6 +550,8 @@ function refund(sender, amount, currency, reason, retries, data) {
   memo = memo.replace(/{currency}/g, currency);
   memo = memo.replace(/{min_bid}/g, config.min_bid);
   memo = memo.replace(/{max_bid}/g, config.max_bid);
+  memo = memo.replace(/{account}/g, config.account);
+  memo = memo.replace(/{owner}/g, config.owner_account);
   memo = memo.replace(/{tag}/g, data);
 
   var days = Math.floor(config.max_post_age / 24);
