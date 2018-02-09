@@ -47,6 +47,7 @@ Then set the following options in config.json:
   "refund_blacklist": true,	// Whether or not to refund blacklisted users' bids
   "blacklist_donation_account": "steemcleaners", // If "refund_blacklist" is false, then this will send all bids from blacklisted users to the specified account as a donation
   "blacklisted_tags": ["nsfw", "other-tag"], // List of post tags that are not allowed by the bot. Bids for posts with one or more tags in this list will be refunded
+  "max_per_author_per_round": 1, // Limit to the number of posts that can be voted on for a particular author each round
   "auto_withdrawal": {
     "active": true, // Activate the auto withdrawal function (will withdraw all accepted currencies)
     "accounts": [	// List of accounts to receive daily withdrawals and the amount to send to each
@@ -81,7 +82,8 @@ Then set the following options in config.json:
     "blacklist_donation": "Bid from blacklisted user sent as a donation. Thank you!",
     "flag_refund": "Refund for invalid bid: {amount} - This post has been flagged by one or more spam / abuse indicator accounts.",
     "flag_no_refund": "Bid is invalid - This post has been flagged by one or more spam / abuse indicator accounts.",
-    "blacklist_tag": "Bid is invalid - This post contains the [{tag}] tag which is not allowed by this bot."
+    "blacklist_tag": "Bid is invalid - This post contains the [{tag}] tag which is not allowed by this bot.",
+    "bids_per_round": "Bid is invalid - This author already has the maximum number of allowed bids in this round."
   }
 }
 ```

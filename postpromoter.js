@@ -14,7 +14,7 @@ var last_withdrawal = null;
 var use_delegators = false;
 var steem_price = 1;  // This will get overridden with actual prices if a price_feed_url is specified in settings
 var sbd_price = 1;    // This will get overridden with actual prices if a price_feed_url is specified in settings
-var version = '1.8.4';
+var version = '1.8.5';
 
 // Load the settings from the config file
 loadConfig();
@@ -289,7 +289,7 @@ function getTransactions(callback) {
         // Check that this is a new transaction that we haven't processed already
         if(trans[0] > last_trans) {
 
-          // We only care about SBD transfers to the bot
+          // We only care about transfers to the bot
           if (op[0] == 'transfer' && op[1].to == account.name) {
             var amount = parseFloat(op[1].amount);
             var currency = utils.getCurrency(op[1].amount);
@@ -302,9 +302,6 @@ function getTransactions(callback) {
             if(config.disabled_mode) {
               // Bot is disabled, refund all Bids
               refund(op[1].from, amount, currency, 'bot_disabled');
-            } else if(config.currencies_accepted && config.currencies_accepted.indexOf(currency) < 0) {
-              // Sent an unsupported currency
-              refund(op[1].from, amount, currency, 'invalid_currency');
             } else if(amount < min_bid) {
               // Bid amount is too low (make sure it's above the min_refund_amount setting)
               if(!config.min_refund_amount || amount >= config.min_refund_amount)
@@ -315,6 +312,9 @@ function getTransactions(callback) {
             } else if (amount > max_bid) {
               // Bid amount is too high
               refund(op[1].from, amount, currency, 'above_max_bid');
+            } else if(config.currencies_accepted && config.currencies_accepted.indexOf(currency) < 0) {
+              // Sent an unsupported currency
+              refund(op[1].from, amount, currency, 'invalid_currency');
             } else {
               // Bid amount is just right!
               checkPost(op[1].memo, amount, currency, op[1].from, 0);
@@ -369,6 +369,15 @@ function checkPost(memo, amount, currency, sender, retries) {
     {
       handleBlacklist(author, sender, amount, currency);
       return;
+    }
+
+    // Check if this author has gone over the max bids per author per round
+    if(config.max_per_author_per_round && config.max_per_author_per_round > 0) {
+      if(outstanding_bids.filter(b => b.author == author).length >= config.max_per_author_per_round)
+      {
+        refund(sender, amount, currency, 'bids_per_round');
+        return;
+      }
     }
 
     steem.api.getContent(author, permLink, function (err, result) {
