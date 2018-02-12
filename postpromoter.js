@@ -355,11 +355,12 @@ function checkRoundFillLimit(amount, currency) {
     return false;
 
   var vote_value = utils.getVoteValue(100, account, 10000);
+  var vote_value_usd = vote_value / 2 * sbd_price + vote_value / 2;
   var bid_value = outstanding_bids.reduce(function(t, b) { return t + b.amount * ((b.currency == 'SBD') ? sbd_price : steem_price) }, 0);
   var new_bid_value = amount * ((currency == 'SBD') ? sbd_price : steem_price);
 
   // Check if the value of the bids is over the round fill limit
-  return (vote_value * 0.75 * config.round_fill_limit < bid_value + new_bid_value);
+  return (vote_value_usd * 0.75 * config.round_fill_limit < bid_value + new_bid_value);
 }
 
 function checkPost(memo, amount, currency, sender, retries) {
