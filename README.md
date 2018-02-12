@@ -34,6 +34,7 @@ Then set the following options in config.json:
   "post_rewards_withdrawal_account": "account_name", // Automatically withdraw any liquid post rewards to the specified account
   "min_bid": 0.1,
   "max_bid": 999,
+  "round_fill_limit": 0.9,  // Limit the round to 90% full to guarantee a minimum of 10% ROI for all bidders
   "batch_vote_weight": 100,
   "max_post_age": 144, // In hours, 144 hours = 6 days
   "allow_comments": true,
@@ -86,7 +87,8 @@ Then set the following options in config.json:
     "flag_refund": "Refund for invalid bid: {amount} - This post has been flagged by one or more spam / abuse indicator accounts.",
     "flag_no_refund": "Bid is invalid - This post has been flagged by one or more spam / abuse indicator accounts.",
     "blacklist_tag": "Bid is invalid - This post contains the [{tag}] tag which is not allowed by this bot.",
-    "bids_per_round": "Bid is invalid - This author already has the maximum number of allowed bids in this round."
+    "bids_per_round": "Bid is invalid - This author already has the maximum number of allowed bids in this round.",
+    "round_full": "The current bidding round is full. Please try again next round!"
   }
 }
 ```

@@ -318,6 +318,9 @@ function getTransactions(callback) {
             } else if(config.currencies_accepted && config.currencies_accepted.indexOf(currency) < 0) {
               // Sent an unsupported currency
               refund(op[1].from, amount, currency, 'invalid_currency');
+            } else if(checkRoundFillLimit(amount, currency)) {
+              // Bids are over ROI guarantee value
+              refund(op[1].from, amount, currency, 'round_full');
             } else {
               // Bid amount is just right!
               checkPost(op[1].memo, amount, currency, op[1].from, 0);
@@ -345,6 +348,18 @@ function getTransactions(callback) {
     if (callback)
       callback();
   });
+}
+
+function checkRoundFillLimit(amount, currency) {
+  if(config.round_fill_limit == null || config.round_fill_limit == undefined || isNaN(config.round_fill_limit))
+    return false;
+
+  var vote_value = utils.getVoteValue(100, account, 10000);
+  var bid_value = outstanding_bids.reduce(function(t, b) { return t + b.amount * ((b.currency == 'SBD') ? sbd_price : steem_price) }, 0);
+  var new_bid_value = amount * ((currency == 'SBD') ? sbd_price : steem_price);
+
+  // Check if the value of the bids is over the round fill limit
+  return (vote_value * 0.75 * config.round_fill_limit < bid_value + new_bid_value);
 }
 
 function checkPost(memo, amount, currency, sender, retries) {
