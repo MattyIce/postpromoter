@@ -53,7 +53,10 @@ Then set the following options in config.json:
     "accounts": [	// List of accounts to receive daily withdrawals and the amount to send to each
       {
         "name": "$delegators",  // Use the special name '$delegators' to split this portion of the payout among all delegators to the account based on the amount of their delegation
-        "stake": 8000
+        "stake": 8000,
+        "overrides": [  // Specify a beneficiary account for payments for certain delegators
+          { "name": "delegator_account", "beneficiary": "beneficiary_account" }
+        ]
       },
       {
         "name": "account2",

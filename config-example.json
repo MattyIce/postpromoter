@@ -36,7 +36,10 @@
     "accounts": [
       {
         "name": "$delegators",
-        "stake": 8000
+        "stake": 8000,
+        "overrides": [
+          { "name": "delegator_account", "beneficiary": "beneficiary_account" }
+        ]
       },
       {
         "name": "account2",
