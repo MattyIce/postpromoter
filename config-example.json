@@ -24,7 +24,7 @@
   "currencies_accepted": ["SBD", "STEEM"],
   "refunds_enabled": true,
   "min_refund_amount": 0.002,
-  "no_refund": ["bittrex", "poloniex", "openledger", "blocktrades", "minnowbooster"],
+  "no_refund": ["bittrex", "poloniex", "openledger", "blocktrades", "minnowbooster", "ginabot"],
   "flag_signal_accounts": ["spaminator", "cheetah", "steemcleaners", "mack-bot", "blacklist-a"],
   "comment_location": "comment.md",
   "blacklist_location": "blacklist",
