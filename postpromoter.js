@@ -14,7 +14,7 @@ var last_withdrawal = null;
 var use_delegators = false;
 var steem_price = 1;  // This will get overridden with actual prices if a price_feed_url is specified in settings
 var sbd_price = 1;    // This will get overridden with actual prices if a price_feed_url is specified in settings
-var version = '1.8.6';
+var version = '1.8.7';
 
 // Load the settings from the config file
 loadConfig();
@@ -424,6 +424,12 @@ function checkPost(memo, amount, currency, sender, retries) {
 
             var created = new Date(result.created + 'Z');
 
+            // Check if this post is below the minimum post age
+            if(config.min_post_age && config.min_post_age > 0 && (new Date() - created) < (config.min_post_age * 60 * 1000)) {
+              refund(sender, amount, currency, 'min_age');
+              return;
+            }
+
             // Get the list of votes on this post to make sure the bot didn't already vote on it (you'd be surprised how often people double-submit!)
             var votes = result.active_votes.filter(function(vote) { return vote.voter == account.name; });
 
@@ -580,6 +586,7 @@ function refund(sender, amount, currency, reason, retries, data) {
   memo = memo.replace(/{max_bid}/g, config.max_bid);
   memo = memo.replace(/{account}/g, config.account);
   memo = memo.replace(/{owner}/g, config.owner_account);
+  memo = memo.replace(/{min_age}/g, config.min_post_age);
   memo = memo.replace(/{tag}/g, data);
 
   var days = Math.floor(config.max_post_age / 24);

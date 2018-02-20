@@ -36,6 +36,7 @@ Then set the following options in config.json:
   "max_bid": 999,
   "round_fill_limit": 0.9,  // Limit the round to 90% full to guarantee a minimum of 10% ROI for all bidders
   "batch_vote_weight": 100,
+  "min_post_age": 20, // In minutes, minimum age of post that will be accepted
   "max_post_age": 144, // In hours, 144 hours = 6 days
   "allow_comments": true,
   "currencies_accepted": ["SBD", "STEEM"], // Which currencies to accept
@@ -80,6 +81,7 @@ Then set the following options in config.json:
     "no_comments": "Refund for invalid bid: {amount} - Bids not allowed on comments.",
     "already_voted": "Refund for invalid bid: {amount} - Bot already voted on this post.",
     "max_age": "Refund for invalid bid: {amount} - Posts cannot be older than {max_age}.",
+    "min_age": "Refund for invalid bid: {amount} - Posts cannot be less than {min_age} minutes old.",
     "invalid_post_url": "Refund for invalid bid: {amount} - Invalid post URL in memo.",
     "blacklist_refund": "Refund for invalid bid: {amount} - The author of this post is on the blacklist.",
     "blacklist_no_refund": "Bid is invalid - The author of this post is on the blacklist.",
