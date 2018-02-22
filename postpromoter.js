@@ -330,9 +330,9 @@ function getTransactions(callback) {
             var delegator = delegators.find(d => d.delegator == op[1].delegator);
 
             if(delegator)
-              delegator.vesting_shares = op[1].vesting_shares;
+              delegator.new_vesting_shares = op[1].vesting_shares;
             else
-              delegators.push({ delegator: op[1].delegator, vesting_shares: op[1].vesting_shares });
+              delegators.push({ delegator: op[1].delegator, vesting_shares: 0, new_vesting_shares: op[1].vesting_shares });
 
             // Save the updated list of delegators to disk
             saveDelegators();
@@ -781,6 +781,21 @@ function processWithdrawals() {
     } else
       sendWithdrawals(withdrawals);
   }
+
+  updateDelegations();
+}
+
+function updateDelegations() {
+  var updates = delegators.filter(d => parseFloat(d.new_vesting_shares) > 0);
+
+  for (var i = 0; i < updates.length; i++) {
+    var delegator = updates[i];
+
+    delegator.vesting_shares = delegator.new_vesting_shares;
+    delegator.new_vesting_shares = 0;
+  }
+
+  saveDelegators();
 }
 
 function sendWithdrawals(withdrawals) {
