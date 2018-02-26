@@ -129,30 +129,20 @@ function startProcess() {
     if (vp >= 10000 && outstanding_bids.length > 0) {
 
       // Don't process any bids while we are voting due to race condition (they will be processed when voting is done).
-      isVoting = true;
+      isVoting = first_load = true;
 
-      // Add a little delay to get last-minute bids in
-      setTimeout(function () {
-        getTransactions(function () {
-          first_load = true;
+      // Make a copy of the list of outstanding bids and vote on them
+      startVoting(outstanding_bids.slice().reverse());
 
-          // Make a copy of the list of outstanding bids and vote on them
-          startVoting(outstanding_bids.slice().reverse());
+      // Save the last round of bids for use in API call
+      last_round = outstanding_bids.slice();
 
-          // Save the last round of bids for use in API call
-          last_round = outstanding_bids.slice();
+      // Reset the list of outstanding bids for the next round
+      outstanding_bids = [];
 
-          // Reset the list of outstanding bids for the next round
-          outstanding_bids = [];
-
-          // Send out earnings if frequency is set to every round
-          if (config.auto_withdrawal.frequency == 'round_end')
-            processWithdrawals();
-
-          // Save the state of the bot to disk.
-          saveState();
-        });
-      }, 30 * 1000);
+      // Send out earnings if frequency is set to every round
+      if (config.auto_withdrawal.frequency == 'round_end')
+        processWithdrawals();
     } else
       getTransactions();
 
@@ -423,9 +413,10 @@ function checkPost(memo, amount, currency, sender, retries) {
             }
 
             var created = new Date(result.created + 'Z');
+            var time_until_vote = utils.timeTilFullPower(utils.getVotingPower(account));
 
             // Check if this post is below the minimum post age
-            if(config.min_post_age && config.min_post_age > 0 && (new Date() - created) < (config.min_post_age * 60 * 1000)) {
+            if(config.min_post_age && config.min_post_age > 0 && (new Date() - created + (time_until_vote * 1000)) < (config.min_post_age * 60 * 1000)) {
               refund(sender, amount, currency, 'min_age');
               return;
             }
@@ -473,13 +464,23 @@ function checkPost(memo, amount, currency, sender, retries) {
           // There is already a bid for this post in the current round
           utils.log('Existing Bid Found - New Amount: ' + amount + ', Total Amount: ' + (existing_bid.amount + amount));
 
+          var new_amount = 0;
+
           if(existing_bid.currency == currency) {
-            existing_bid.amount += amount;
+            new_amount = existing_bid.amount + amount;
           } else if(existing_bid.currency == 'STEEM') {
-            existing_bid.amount += amount * sbd_price / steem_price;
+            new_amount = existing_bid.amount + amount * sbd_price / steem_price;
           } else if(existing_bid.currency == 'SBD') {
-            existing_bid.amount += amount * steem_price / sbd_price;
+            new_amount = existing_bid.amount + amount * steem_price / sbd_price;
           }
+          
+          var max_bid = config.max_bid ? parseFloat(config.max_bid) : 9999;
+
+          // Check that the new total doesn't exceed the max bid amount per post
+          if (new_amount > max_bid)
+            refund(sender, amount, currency, 'above_max_bid');
+          else
+            existing_bid.amount = new_amount;
         } else {
           // All good - push to the array of valid bids for this round
           utils.log('Valid Bid - Amount: ' + amount + ' ' + currency + ', Title: ' + result.title);
