@@ -23,6 +23,7 @@ Then set the following options in config.json:
     "https://steemd.privex.io",
     "https://gtg.steem.house:8090"
   ],
+  "backup_mode": false, // Put the bot in "backup mode" where it will process all bids and account state but not vote or transact
   "disabled_mode": false, // Set this to true to refund all funds sent to the bot
   "detailed_logging": false, // Whether or not detailed logging is enabled
   "owner_account": "bot_owner_account", // The name of the bot owner account (can be left null or blank)

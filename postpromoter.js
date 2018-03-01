@@ -14,7 +14,7 @@ var last_withdrawal = null;
 var use_delegators = false;
 var steem_price = 1;  // This will get overridden with actual prices if a price_feed_url is specified in settings
 var sbd_price = 1;    // This will get overridden with actual prices if a price_feed_url is specified in settings
-var version = '1.8.7';
+var version = '1.8.8';
 
 // Load the settings from the config file
 loadConfig();
@@ -25,6 +25,9 @@ steem.api.setOptions({ transport: 'http', uri: rpc_node, url: rpc_node });
 
 utils.log("* START - Version: " + version + " *");
 utils.log("Connected to: " + rpc_node);
+
+if(config.backup_mode)
+  utils.log('*** RUNNING IN BACKUP MODE ***');
 
 // Load Steem global variables
 utils.updateSteemVariables();
@@ -122,7 +125,7 @@ function startProcess() {
     if(config.detailed_logging) {
       var bids_steem = utils.format(outstanding_bids.reduce(function(t, b) { return t + ((b.currency == 'STEEM') ? b.amount : 0); }, 0), 3);
       var bids_sbd = utils.format(outstanding_bids.reduce(function(t, b) { return t + ((b.currency == 'SBD') ? b.amount : 0); }, 0), 3);
-      utils.log('Voting Power: ' + utils.format(vp / 100) + '% | Time until next round: ' + utils.toTimer(utils.timeTilFullPower(vp)) + ' | Bids: ' + outstanding_bids.length + ' | ' + bids_sbd + ' SBD | ' + bids_steem + ' STEEM');
+      utils.log((config.backup_mode ? '* BACKUP MODE *' : '') + 'Voting Power: ' + utils.format(vp / 100) + '% | Time until next round: ' + utils.toTimer(utils.timeTilFullPower(vp)) + ' | Bids: ' + outstanding_bids.length + ' | ' + bids_sbd + ' SBD | ' + bids_steem + ' STEEM');
     }
 
     // We are at 100% voting power - time to vote!
@@ -152,6 +155,12 @@ function startProcess() {
 }
 
 function startVoting(bids) {
+  if(config.backup_mode) {
+    utils.log('Bidding Round End - Backup Mode, no voting');
+    isVoting = false;
+    return;
+  }
+
   // Sum the amounts of all of the bids
   var total = bids.reduce(function(total, bid) {
     return total + getUsdValue(bid);
@@ -473,7 +482,7 @@ function checkPost(memo, amount, currency, sender, retries) {
           } else if(existing_bid.currency == 'SBD') {
             new_amount = existing_bid.amount + amount * steem_price / sbd_price;
           }
-          
+
           var max_bid = config.max_bid ? parseFloat(config.max_bid) : 9999;
 
           // Check that the new total doesn't exceed the max bid amount per post
@@ -570,6 +579,11 @@ function saveDelegators() {
 }
 
 function refund(sender, amount, currency, reason, retries, data) {
+  if(config.backup_mode) {
+    utils.log('Backup Mode - not sending refund of ' + amount + ' ' + currency + ' to @' + sender + ' for reason: ' + reason);
+    return;
+  }
+
   if(!retries)
     retries = 0;
 
@@ -611,7 +625,7 @@ function refund(sender, amount, currency, reason, retries, data) {
 }
 
 function claimRewards() {
-  if (!config.auto_claim_rewards)
+  if (!config.auto_claim_rewards || config.backup_mode)
     return;
 
   // Make api call only if you have actual reward
@@ -660,6 +674,9 @@ function checkAutoWithdraw() {
 }
 
 function processWithdrawals() {
+  if(config.backup_mode)
+    return;
+
   var has_sbd = config.currencies_accepted.indexOf('SBD') >= 0 && parseFloat(account.sbd_balance) > 0;
   var has_steem = config.currencies_accepted.indexOf('STEEM') >= 0 && parseFloat(account.balance) > 0;
 

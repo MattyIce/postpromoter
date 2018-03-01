@@ -6,6 +6,7 @@
     "https://steemd.privex.io",
     "https://gtg.steem.house:8090"
   ],
+  "backup_mode": false,
   "disabled_mode": false,
   "detailed_logging": false,
   "owner_account": "bot_owner_account_name",
