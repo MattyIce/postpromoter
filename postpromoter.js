@@ -694,6 +694,23 @@ function processWithdrawals() {
 
       // If this is the special $delegators account, split it between all delegators to the bot
       if(withdrawal_account.name == '$delegators') {
+        // Check if/where we should send payout for SP in the bot account directly
+        if(withdrawal_account.overrides) {
+          var bot_override = withdrawal_account.overrides.find(o => o.name == config.account);
+
+          if(bot_override && bot_override.beneficiary) {
+            var bot_delegator = delegators.find(d => d.delegator == config.account);
+
+            // Calculate the amount of SP in the bot account and add/update it in the list of delegators
+            var bot_vesting_shares = (parseFloat(account.vesting_shares) - parseFloat(account.delegated_vesting_shares)).toFixed(6) + ' VESTS';
+
+            if(bot_delegator)
+              bot_delegator.vesting_shares = bot_vesting_shares;
+            else
+              delegators.push({ delegator: config.account, vesting_shares: bot_vesting_shares });
+          }
+        }
+
         // Get the total amount delegated by all delegators
         var total_vests = delegators.reduce(function (total, v) { return total + parseFloat(v.vesting_shares); }, 0);
 
