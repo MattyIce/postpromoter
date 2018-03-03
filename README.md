@@ -35,6 +35,7 @@ Then set the following options in config.json:
   "post_rewards_withdrawal_account": "account_name", // Automatically withdraw any liquid post rewards to the specified account
   "min_bid": 0.1,
   "max_bid": 999,
+  "min_resteem": 1, // If a bid is sent for this amount or more then the bot will resteem the post
   "round_fill_limit": 0.9,  // Limit the round to 90% full to guarantee a minimum of 10% ROI for all bidders
   "batch_vote_weight": 100,
   "min_post_age": 20, // In minutes, minimum age of post that will be accepted

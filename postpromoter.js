@@ -255,6 +255,26 @@ function sendComment(bid) {
       }
     });
   }
+
+  // Check if the bot should resteem this post
+  if (config.min_resteem && bid.amount >= config.min_resteem)
+    resteem(bid);
+}
+
+function resteem(bid) {
+  var json = JSON.stringify(['reblog', {
+    account: config.account,
+    author: bid.author,
+    permlink: bid.permlink
+  }]);
+
+  steem.broadcast.customJson(config.posting_key, [], [config.account], 'follow', json, (err, result) => {
+    if (!err && result) {
+      utils.log('Resteemed Post: @' + bid.sender + '/' + bid.permlink);
+    } else {
+      utils.log('Error resteeming post: @' + bid.sender + '/' + bid.permlink);
+    }
+  });
 }
 
 function getTransactions(callback) {
