@@ -168,11 +168,24 @@ function startVoting(bids) {
 
   utils.log('=======================================================');
   utils.log('Bidding Round End! Starting to vote! Total bids: ' + bids.length + ' - $' + total);
+
+  if(config.max_roi != null && config.max_roi != undefined && !isNaN(config.max_roi)) {
+    var vote_value = utils.getVoteValue(100, account, 10000);
+    var vote_value_usd = vote_value / 2 * sbd_price + vote_value / 2;
+    //min_total_bids_value_usd: calculates the minimum value in USD that the total bids must have to represent a maximum ROI defined in config.json
+    //'max_roi' in config.json = 10 represents a maximum ROI of 10%
+    var min_total_bids_value_usd = vote_value_usd * 0.75 * ((100 - config.max_roi) / 100 );
+    // calculates the value of the weight of the vote needed to give the maximum ROI defined
+    var weight = (total < min_total_bids_value_usd) ? (total / min_total_bids_value_usd) : 1;
+    utils.log('Vote weight: ' + (config.batch_vote_weight * weight));
+  } else
+    var weight = 1;
+
   utils.log('=======================================================');
 
   for(var i = 0; i < bids.length; i++) {
     // Calculate the vote weight to be used for each bid based on the amount bid as a percentage of the total bids
-    bids[i].weight = Math.round(config.batch_vote_weight * 100 * (getUsdValue(bids[i]) / total));
+    bids[i].weight = Math.round(config.batch_vote_weight * weight * 100 * (getUsdValue(bids[i]) / total));
   }
 
   comment(bids.slice());
