@@ -93,7 +93,8 @@ Then set the following options in config.json:
     "flag_no_refund": "Bid is invalid - This post has been flagged by one or more spam / abuse indicator accounts.",
     "blacklist_tag": "Bid is invalid - This post contains the [{tag}] tag which is not allowed by this bot.",
     "bids_per_round": "Bid is invalid - This author already has the maximum number of allowed bids in this round.",
-    "round_full": "The current bidding round is full. Please try again next round!"
+    "round_full": "The current bidding round is full. Please try again next round!",
+    "forward_payment": "Payment forwarded from @{tag}."
   }
 }
 ```

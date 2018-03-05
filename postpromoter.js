@@ -14,7 +14,7 @@ var last_withdrawal = null;
 var use_delegators = false;
 var steem_price = 1;  // This will get overridden with actual prices if a price_feed_url is specified in settings
 var sbd_price = 1;    // This will get overridden with actual prices if a price_feed_url is specified in settings
-var version = '1.8.8';
+var version = '1.8.9';
 
 // Load the settings from the config file
 loadConfig();
@@ -180,7 +180,7 @@ function startVoting(bids) {
     // calculates the value of the weight of the vote needed to give the maximum ROI defined
     adjusted_weight = (total < min_total_bids_value_usd) ? (total / min_total_bids_value_usd) : 1;
     utils.log('Total vote weight: ' + (config.batch_vote_weight * adjusted_weight));
-  } 
+  }
 
   utils.log('=======================================================');
 
@@ -624,6 +624,11 @@ function refund(sender, amount, currency, reason, retries, data) {
   // Make sure refunds are enabled and the sender isn't on the no-refund list (for exchanges and things like that).
   if (!config.refunds_enabled || sender == config.account || (config.no_refund && config.no_refund.indexOf(sender) >= 0)) {
     utils.log("Invalid bid - " + reason + ' NO REFUND');
+
+    // If this is a payment from an account on the no_refund list, forward the payment to the post_rewards_withdrawal_account
+    if(config.no_refund && config.no_refund.indexOf(sender) >= 0 && config.post_rewards_withdrawal_account && config.post_rewards_withdrawal_account != '')
+      refund(config.post_rewards_withdrawal_account, amount, currency, 'forward_payment', 0, sender);
+
     return;
   }
 
