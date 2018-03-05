@@ -14,7 +14,7 @@ var last_withdrawal = null;
 var use_delegators = false;
 var steem_price = 1;  // This will get overridden with actual prices if a price_feed_url is specified in settings
 var sbd_price = 1;    // This will get overridden with actual prices if a price_feed_url is specified in settings
-var version = '1.8.8';
+var version = '1.8.9';
 
 // Load the settings from the config file
 loadConfig();
@@ -108,12 +108,14 @@ function startProcess() {
     if (result && !err) {
       account = result[0];
 
-      // Check if there are any rewards to claim.
-      claimRewards();
+      if(!isVoting) {
+        // Check if there are any rewards to claim.
+        claimRewards();
 
-      // Check if it is time to withdraw funds.
-      if (config.auto_withdrawal.frequency == 'daily')
-        checkAutoWithdraw();
+        // Check if it is time to withdraw funds.
+        if (config.auto_withdrawal.frequency == 'daily')
+          checkAutoWithdraw();
+      }
     } else
       logError('Error loading bot account: ' + err);
   });
@@ -156,8 +158,8 @@ function startProcess() {
 
 function startVoting(bids) {
   if(config.backup_mode) {
-    utils.log('Bidding Round End - Backup Mode, no voting');
-    isVoting = false;
+    utils.log('*** Bidding Round End - Backup Mode, no voting ***');
+    setTimeout(function () { isVoting = false; first_load = true; }, 5 * 60 * 1000);
     return;
   }
 
@@ -169,6 +171,8 @@ function startVoting(bids) {
   utils.log('=======================================================');
   utils.log('Bidding Round End! Starting to vote! Total bids: ' + bids.length + ' - $' + total);
 
+  var adjusted_weight = 1;
+
   if(config.max_roi != null && config.max_roi != undefined && !isNaN(config.max_roi)) {
     var vote_value = utils.getVoteValue(100, account, 10000);
     var vote_value_usd = vote_value / 2 * sbd_price + vote_value / 2;
@@ -176,16 +180,15 @@ function startVoting(bids) {
     //'max_roi' in config.json = 10 represents a maximum ROI of 10%
     var min_total_bids_value_usd = vote_value_usd * 0.75 * ((100 - config.max_roi) / 100 );
     // calculates the value of the weight of the vote needed to give the maximum ROI defined
-    var weight = (total < min_total_bids_value_usd) ? (total / min_total_bids_value_usd) : 1;
-    utils.log('Vote weight: ' + (config.batch_vote_weight * weight));
-  } else
-    var weight = 1;
+    adjusted_weight = (total < min_total_bids_value_usd) ? (total / min_total_bids_value_usd) : 1;
+    utils.log('Total vote weight: ' + (config.batch_vote_weight * adjusted_weight));
+  }
 
   utils.log('=======================================================');
 
   for(var i = 0; i < bids.length; i++) {
     // Calculate the vote weight to be used for each bid based on the amount bid as a percentage of the total bids
-    bids[i].weight = Math.round(config.batch_vote_weight * weight * 100 * (getUsdValue(bids[i]) / total));
+    bids[i].weight = Math.round(config.batch_vote_weight * adjusted_weight * 100 * (getUsdValue(bids[i]) / total));
   }
 
   comment(bids.slice());
@@ -268,6 +271,26 @@ function sendComment(bid) {
       }
     });
   }
+
+  // Check if the bot should resteem this post
+  if (config.min_resteem && bid.amount >= config.min_resteem)
+    resteem(bid);
+}
+
+function resteem(bid) {
+  var json = JSON.stringify(['reblog', {
+    account: config.account,
+    author: bid.author,
+    permlink: bid.permlink
+  }]);
+
+  steem.broadcast.customJson(config.posting_key, [], [config.account], 'follow', json, (err, result) => {
+    if (!err && result) {
+      utils.log('Resteemed Post: @' + bid.sender + '/' + bid.permlink);
+    } else {
+      utils.log('Error resteeming post: @' + bid.sender + '/' + bid.permlink);
+    }
+  });
 }
 
 function getTransactions(callback) {
@@ -603,6 +626,11 @@ function refund(sender, amount, currency, reason, retries, data) {
   // Make sure refunds are enabled and the sender isn't on the no-refund list (for exchanges and things like that).
   if (!config.refunds_enabled || sender == config.account || (config.no_refund && config.no_refund.indexOf(sender) >= 0)) {
     utils.log("Invalid bid - " + reason + ' NO REFUND');
+
+    // If this is a payment from an account on the no_refund list, forward the payment to the post_rewards_withdrawal_account
+    if(config.no_refund && config.no_refund.indexOf(sender) >= 0 && config.post_rewards_withdrawal_account && config.post_rewards_withdrawal_account != '')
+      refund(config.post_rewards_withdrawal_account, amount, currency, 'forward_payment', 0, sender);
+
     return;
   }
 
@@ -707,6 +735,23 @@ function processWithdrawals() {
 
       // If this is the special $delegators account, split it between all delegators to the bot
       if(withdrawal_account.name == '$delegators') {
+        // Check if/where we should send payout for SP in the bot account directly
+        if(withdrawal_account.overrides) {
+          var bot_override = withdrawal_account.overrides.find(o => o.name == config.account);
+
+          if(bot_override && bot_override.beneficiary) {
+            var bot_delegator = delegators.find(d => d.delegator == config.account);
+
+            // Calculate the amount of SP in the bot account and add/update it in the list of delegators
+            var bot_vesting_shares = (parseFloat(account.vesting_shares) - parseFloat(account.delegated_vesting_shares)).toFixed(6) + ' VESTS';
+
+            if(bot_delegator)
+              bot_delegator.vesting_shares = bot_vesting_shares;
+            else
+              delegators.push({ delegator: config.account, vesting_shares: bot_vesting_shares });
+          }
+        }
+
         // Get the total amount delegated by all delegators
         var total_vests = delegators.reduce(function (total, v) { return total + parseFloat(v.vesting_shares); }, 0);
 

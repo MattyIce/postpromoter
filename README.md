@@ -35,6 +35,8 @@ Then set the following options in config.json:
   "post_rewards_withdrawal_account": "account_name", // Automatically withdraw any liquid post rewards to the specified account
   "min_bid": 0.1,
   "max_bid": 999,
+  "min_resteem": 1, // If a bid is sent for this amount or more then the bot will resteem the post
+  "max_roi": 10, // If too few votes come in this will limit the bot's vote weight so that no more than a 10% ROI is given for votes
   "round_fill_limit": 0.9,  // Limit the round to 90% full to guarantee a minimum of 10% ROI for all bidders
   "batch_vote_weight": 100,
   "min_post_age": 20, // In minutes, minimum age of post that will be accepted
@@ -91,7 +93,8 @@ Then set the following options in config.json:
     "flag_no_refund": "Bid is invalid - This post has been flagged by one or more spam / abuse indicator accounts.",
     "blacklist_tag": "Bid is invalid - This post contains the [{tag}] tag which is not allowed by this bot.",
     "bids_per_round": "Bid is invalid - This author already has the maximum number of allowed bids in this round.",
-    "round_full": "The current bidding round is full. Please try again next round!"
+    "round_full": "The current bidding round is full. Please try again next round!",
+    "forward_payment": "Payment forwarded from @{tag}."
   }
 }
 ```
