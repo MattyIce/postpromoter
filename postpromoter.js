@@ -156,8 +156,8 @@ function startProcess() {
 
 function startVoting(bids) {
   if(config.backup_mode) {
-    utils.log('Bidding Round End - Backup Mode, no voting');
-    isVoting = false;
+    utils.log('*** Bidding Round End - Backup Mode, no voting ***');
+    setTimeout(function () { isVoting = false; first_load = true; }, 5 * 60 * 1000);
     return;
   }
 
@@ -169,6 +169,8 @@ function startVoting(bids) {
   utils.log('=======================================================');
   utils.log('Bidding Round End! Starting to vote! Total bids: ' + bids.length + ' - $' + total);
 
+  var adjusted_weight = 1;
+
   if(config.max_roi != null && config.max_roi != undefined && !isNaN(config.max_roi)) {
     var vote_value = utils.getVoteValue(100, account, 10000);
     var vote_value_usd = vote_value / 2 * sbd_price + vote_value / 2;
@@ -176,16 +178,15 @@ function startVoting(bids) {
     //'max_roi' in config.json = 10 represents a maximum ROI of 10%
     var min_total_bids_value_usd = vote_value_usd * 0.75 * ((100 - config.max_roi) / 100 );
     // calculates the value of the weight of the vote needed to give the maximum ROI defined
-    var weight = (total < min_total_bids_value_usd) ? (total / min_total_bids_value_usd) : 1;
-    utils.log('Vote weight: ' + (config.batch_vote_weight * weight));
-  } else
-    var weight = 1;
+    adjusted_weight = (total < min_total_bids_value_usd) ? (total / min_total_bids_value_usd) : 1;
+    utils.log('Total vote weight: ' + (config.batch_vote_weight * adjusted_weight));
+  } 
 
   utils.log('=======================================================');
 
   for(var i = 0; i < bids.length; i++) {
     // Calculate the vote weight to be used for each bid based on the amount bid as a percentage of the total bids
-    bids[i].weight = Math.round(config.batch_vote_weight * weight * 100 * (getUsdValue(bids[i]) / total));
+    bids[i].weight = Math.round(config.batch_vote_weight * adjusted_weight * 100 * (getUsdValue(bids[i]) / total));
   }
 
   comment(bids.slice());
