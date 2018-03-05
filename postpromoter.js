@@ -108,12 +108,14 @@ function startProcess() {
     if (result && !err) {
       account = result[0];
 
-      // Check if there are any rewards to claim.
-      claimRewards();
+      if(!isVoting) {
+        // Check if there are any rewards to claim.
+        claimRewards();
 
-      // Check if it is time to withdraw funds.
-      if (config.auto_withdrawal.frequency == 'daily')
-        checkAutoWithdraw();
+        // Check if it is time to withdraw funds.
+        if (config.auto_withdrawal.frequency == 'daily')
+          checkAutoWithdraw();
+      }
     } else
       logError('Error loading bot account: ' + err);
   });
