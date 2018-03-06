@@ -862,13 +862,13 @@ function processWithdrawals() {
 }
 
 function updateDelegations() {
-  var updates = delegators.filter(d => parseFloat(d.new_vesting_shares) > 0);
+  var updates = delegators.filter(d => parseFloat(d.new_vesting_shares) >= 0);
 
   for (var i = 0; i < updates.length; i++) {
     var delegator = updates[i];
 
     delegator.vesting_shares = delegator.new_vesting_shares;
-    delegator.new_vesting_shares = 0;
+    delegator.new_vesting_shares = null;
   }
 
   saveDelegators();
