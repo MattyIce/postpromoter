@@ -419,7 +419,7 @@ function checkPost(memo, amount, currency, sender, retries) {
     }
 
     // Make sure the author isn't on the blacklist!
-    if(config.blacklist && config.blacklist.indexOf(author) >= 0)
+    if(config.blacklist && (config.blacklist.indexOf(author) >= 0 || config.blacklist.indexOf(sender) >= 0))
     {
       handleBlacklist(author, sender, amount, currency);
       return;
