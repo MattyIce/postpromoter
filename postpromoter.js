@@ -12,92 +12,97 @@ var first_load = true;
 var isVoting = false;
 var last_withdrawal = null;
 var use_delegators = false;
+var round_end_timeout = -1;
 var steem_price = 1;  // This will get overridden with actual prices if a price_feed_url is specified in settings
 var sbd_price = 1;    // This will get overridden with actual prices if a price_feed_url is specified in settings
-var version = '1.8.9';
+var version = '1.9.0';
 
-// Load the settings from the config file
-loadConfig();
+startup();
 
-// Connect to the specified RPC node
-var rpc_node = config.rpc_nodes ? config.rpc_nodes[0] : (config.rpc_node ? config.rpc_node : 'https://api.steemit.com');
-steem.api.setOptions({ transport: 'http', uri: rpc_node, url: rpc_node });
+function startup() {
+  // Load the settings from the config file
+  loadConfig();
 
-utils.log("* START - Version: " + version + " *");
-utils.log("Connected to: " + rpc_node);
+  // Connect to the specified RPC node
+  var rpc_node = config.rpc_nodes ? config.rpc_nodes[0] : (config.rpc_node ? config.rpc_node : 'https://api.steemit.com');
+  steem.api.setOptions({ transport: 'http', uri: rpc_node, url: rpc_node });
 
-if(config.backup_mode)
-  utils.log('*** RUNNING IN BACKUP MODE ***');
+  utils.log("* START - Version: " + version + " *");
+  utils.log("Connected to: " + rpc_node);
 
-// Load Steem global variables
-utils.updateSteemVariables();
+  if(config.backup_mode)
+    utils.log('*** RUNNING IN BACKUP MODE ***');
 
-// If the API is enabled, start the web server
-if(config.api && config.api.enabled) {
-  var express = require('express');
-  var app = express();
+  // Load Steem global variables
+  utils.updateSteemVariables();
 
-  app.use(function(req, res, next) {
-    res.header("Access-Control-Allow-Origin", "*");
-    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
-    next();
-  });
+  // If the API is enabled, start the web server
+  if(config.api && config.api.enabled) {
+    var express = require('express');
+    var app = express();
 
-  app.get('/api/bids', (req, res) => res.json({ current_round: outstanding_bids, last_round: last_round }));
-  app.listen(config.api.port, () => utils.log('API running on port ' + config.api.port))
-}
-
-// Check whether or not auto-withdrawals are set to be paid to delegators.
-use_delegators = config.auto_withdrawal && config.auto_withdrawal.active && config.auto_withdrawal.accounts.find(a => a.name == '$delegators');
-
-// If so then we need to load the list of delegators to the account
-if(use_delegators) {
-  if(fs.existsSync('delegators.json')) {
-    delegators = JSON.parse(fs.readFileSync("delegators.json"));
-
-    var vests = delegators.reduce(function (total, v) { return total + parseFloat(v.vesting_shares); }, 0);
-    utils.log('Delegators Loaded (from disk) - ' + delegators.length + ' delegators and ' + vests + ' VESTS in total!');
-  }
-  else
-  {
-    var del = require('./delegators');
-    utils.log('Started loading delegators from account history...');
-    del.loadDelegations(config.account, function(d) {
-      delegators = d;
-      var vests = delegators.reduce(function (total, v) { return total + parseFloat(v.vesting_shares); }, 0);
-      utils.log('Delegators Loaded (from account history) - ' + delegators.length + ' delegators and ' + vests + ' VESTS in total!');
-
-      // Save the list of delegators to disk
-      saveDelegators();
+    app.use(function(req, res, next) {
+      res.header("Access-Control-Allow-Origin", "*");
+      res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+      next();
     });
+
+    app.get('/api/bids', (req, res) => res.json({ current_round: outstanding_bids, last_round: last_round }));
+    app.listen(config.api.port, () => utils.log('API running on port ' + config.api.port))
   }
+
+  // Check whether or not auto-withdrawals are set to be paid to delegators.
+  use_delegators = config.auto_withdrawal && config.auto_withdrawal.active && config.auto_withdrawal.accounts.find(a => a.name == '$delegators');
+
+  // If so then we need to load the list of delegators to the account
+  if(use_delegators) {
+    if(fs.existsSync('delegators.json')) {
+      delegators = JSON.parse(fs.readFileSync("delegators.json"));
+
+      var vests = delegators.reduce(function (total, v) { return total + parseFloat(v.vesting_shares); }, 0);
+      utils.log('Delegators Loaded (from disk) - ' + delegators.length + ' delegators and ' + vests + ' VESTS in total!');
+    }
+    else
+    {
+      var del = require('./delegators');
+      utils.log('Started loading delegators from account history...');
+      del.loadDelegations(config.account, function(d) {
+        delegators = d;
+        var vests = delegators.reduce(function (total, v) { return total + parseFloat(v.vesting_shares); }, 0);
+        utils.log('Delegators Loaded (from account history) - ' + delegators.length + ' delegators and ' + vests + ' VESTS in total!');
+
+        // Save the list of delegators to disk
+        saveDelegators();
+      });
+    }
+  }
+
+  // Check if bot state has been saved to disk, in which case load it
+  if (fs.existsSync('state.json')) {
+    var state = JSON.parse(fs.readFileSync("state.json"));
+
+    if (state.last_trans)
+      last_trans = state.last_trans;
+
+    if (state.outstanding_bids)
+      outstanding_bids = state.outstanding_bids;
+
+    if (state.last_round)
+      last_round = state.last_round;
+
+    if(state.last_withdrawal)
+      last_withdrawal = state.last_withdrawal;
+
+    utils.log('Restored saved bot state: ' + JSON.stringify({ last_trans: last_trans, bids: outstanding_bids.length, last_withdrawal: last_withdrawal }));
+  }
+
+  // Schedule to run every 10 seconds
+  setInterval(startProcess, 10000);
+
+  // Load updated STEEM and SBD prices every 30 minutes
+  loadPrices();
+  setInterval(loadPrices, 30 * 60 * 1000);
 }
-
-// Check if bot state has been saved to disk, in which case load it
-if (fs.existsSync('state.json')) {
-  var state = JSON.parse(fs.readFileSync("state.json"));
-
-  if (state.last_trans)
-    last_trans = state.last_trans;
-
-  if (state.outstanding_bids)
-    outstanding_bids = state.outstanding_bids;
-
-  if (state.last_round)
-    last_round = state.last_round;
-
-  if(state.last_withdrawal)
-    last_withdrawal = state.last_withdrawal;
-
-  utils.log('Restored saved bot state: ' + JSON.stringify({ last_trans: last_trans, bids: outstanding_bids.length, last_withdrawal: last_withdrawal }));
-}
-
-// Schedule to run every 10 seconds
-setInterval(startProcess, 10000);
-
-// Load updated STEEM and SBD prices every 30 minutes
-loadPrices();
-setInterval(loadPrices, 30 * 60 * 1000);
 
 function startProcess() {
   // Load the settings from the config file each time so we can pick up any changes
@@ -131,27 +136,35 @@ function startProcess() {
     }
 
     // We are at 100% voting power - time to vote!
-    if (vp >= 10000 && outstanding_bids.length > 0) {
+    if (vp >= 10000 && outstanding_bids.length > 0 && round_end_timeout < 0) {
+      round_end_timeout = setTimeout(function() {
+        round_end_timeout = -1;
 
-      // Don't process any bids while we are voting due to race condition (they will be processed when voting is done).
-      isVoting = first_load = true;
+        // Don't process any bids while we are voting due to race condition (they will be processed when voting is done).
+        isVoting = first_load = true;
 
-      // Make a copy of the list of outstanding bids and vote on them
-      startVoting(outstanding_bids.slice().reverse());
+        // Make a copy of the list of outstanding bids and vote on them
+        startVoting(outstanding_bids.slice().reverse());
 
-      // Save the last round of bids for use in API call
-      last_round = outstanding_bids.slice();
+        // Save the last round of bids for use in API call
+        last_round = outstanding_bids.slice();
 
-      // Reset the list of outstanding bids for the next round
-      outstanding_bids = [];
+        // Reset the list of outstanding bids for the next round
+        outstanding_bids = [];
 
-      // Send out earnings if frequency is set to every round
-      if (config.auto_withdrawal.frequency == 'round_end')
-        processWithdrawals();
-    } else
-      getTransactions();
+        // Send out earnings if frequency is set to every round
+        if (config.auto_withdrawal.frequency == 'round_end')
+          processWithdrawals();
 
-    // Save the state of the bot to disk.
+        // Save the state of the bot to disk
+        saveState();
+      }, 30 * 1000);
+    }
+
+    // Load transactions to the bot account
+    getTransactions();
+
+    // Save the state of the bot to disk
     saveState();
   }
 }
@@ -628,7 +641,7 @@ function refund(sender, amount, currency, reason, retries, data) {
     utils.log("Invalid bid - " + reason + ' NO REFUND');
 
     // If this is a payment from an account on the no_refund list, forward the payment to the post_rewards_withdrawal_account
-    if(config.no_refund && config.no_refund.indexOf(sender) >= 0 && config.post_rewards_withdrawal_account && config.post_rewards_withdrawal_account != '')
+    if(config.no_refund && config.no_refund.indexOf(sender) >= 0 && config.post_rewards_withdrawal_account && config.post_rewards_withdrawal_account != '' && sender != config.post_rewards_withdrawal_account)
       refund(config.post_rewards_withdrawal_account, amount, currency, 'forward_payment', 0, sender);
 
     return;
