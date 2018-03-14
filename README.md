@@ -117,6 +117,8 @@ $ nodejs postpromoter.js
 
 This will run the process in the foreground which is not recommended. We recommend using a tool such as [PM2](http://pm2.keymetrics.io/) to run the process in the background as well as providing many other great features.
 
+# Don't forget to remove the delegators.json file if you want to reload the delegators for your bot.
+
 ## API Setup
 If you would like to use the API functionality set the "api.enabled" setting to "true" and choose a port. You can test if it is working locally by running:
 
