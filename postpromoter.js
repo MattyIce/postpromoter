@@ -15,7 +15,7 @@ var use_delegators = false;
 var round_end_timeout = -1;
 var steem_price = 1;  // This will get overridden with actual prices if a price_feed_url is specified in settings
 var sbd_price = 1;    // This will get overridden with actual prices if a price_feed_url is specified in settings
-var version = '1.9.0';
+var version = '1.9.1';
 
 startup();
 
@@ -384,6 +384,10 @@ function getTransactions(callback) {
 
             // Save the updated list of delegators to disk
             saveDelegators();
+						
+						// Check if we should send a delegation message
+						if(parseFloat(delegator.new_vesting_shares) > parseFloat(delegator.vesting_shares) && config.transfer_memos['delegation'] && config.transfer_memos['delegation'] != '')
+							refund(sender, 0.001, currency, 'delegation', utils.vestsToSP(parseFloat(delegator.new_vesting_shares)));
 
             utils.log('*** Delegation Update - ' + op[1].delegator + ' has delegated ' + op[1].vesting_shares);
           }
@@ -548,7 +552,10 @@ function checkPost(memo, amount, currency, sender, retries) {
         // If a witness_vote transfer memo is set, check if the sender votes for the bot owner as witness and send them a message if not
         if (config.transfer_memos['witness_vote'] && config.transfer_memos['witness_vote'] != '') {
           checkWitnessVote(sender, sender, currency);
-        }
+        } else if(config.transfer_memos['bid_confirmation'] && config.transfer_memos['bid_confirmation'] != '') {
+					// Send bid confirmation transfer memo if one is specified
+					refund(sender, 0.001, currency, 'bid_confirmation', 0);
+				}
     });
 }
 
@@ -599,6 +606,10 @@ function checkWitnessVote(sender, voter, currency) {
 
       if(result[0].witness_votes.indexOf(config.owner_account) < 0)
         refund(sender, 0.001, currency, 'witness_vote', 0);
+		  else if(config.transfer_memos['bid_confirmation'] && config.transfer_memos['bid_confirmation'] != '') {
+				// Send bid confirmation transfer memo if one is specified
+				refund(sender, 0.001, currency, 'bid_confirmation', 0);
+			}
     } else
       logError('Error loading sender account to check witness vote: ' + err);
   });
@@ -656,6 +667,7 @@ function refund(sender, amount, currency, reason, retries, data) {
   memo = memo.replace(/{account}/g, config.account);
   memo = memo.replace(/{owner}/g, config.owner_account);
   memo = memo.replace(/{min_age}/g, config.min_post_age);
+	memo = memo.replace(/{sender}/g, sender);
   memo = memo.replace(/{tag}/g, data);
 
   var days = Math.floor(config.max_post_age / 24);

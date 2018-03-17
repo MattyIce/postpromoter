@@ -11,6 +11,8 @@ var HOURS = 60 * 60;
  var votePowerReserveRate;
  var totalVestingFund;
  var totalVestingShares;
+ var steem_per_mvests;
+ 
  function updateSteemVariables() {
      steem.api.getRewardFund("post", function (e, t) {
        if(t && !e) {
@@ -34,6 +36,7 @@ var HOURS = 60 * 60;
          votePowerReserveRate = t.vote_power_reserve_rate;
          totalVestingFund = parseFloat(t.total_vesting_fund_steem.replace(" STEEM", ""));
          totalVestingShares = parseFloat(t.total_vesting_shares.replace(" VESTS", ""));
+				 steem_per_mvests = ((totalVestingFund / totalVestingShares) * 1000000);
        } else {
          log('Error loading global properties: ' + e);
        }
@@ -41,6 +44,8 @@ var HOURS = 60 * 60;
 
      setTimeout(updateSteemVariables, 180 * 1000)
  }
+ 
+ function vestsToSP(vests) { return vests / 1000000 * steem_per_mvests; }
 
  function getVotingPower(account) {
      var voting_power = account.voting_power;
@@ -140,6 +145,7 @@ function format(n, c, d, t) {
    getVoteValue: getVoteValue,
    timeTilFullPower: timeTilFullPower,
    getVestingShares: getVestingShares,
+	 vestsToSP: vestsToSP,
    getCurrency: getCurrency,
    format: format,
    toTimer: toTimer,
