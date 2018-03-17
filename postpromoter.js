@@ -380,8 +380,10 @@ function getTransactions(callback) {
 
             if(delegator)
               delegator.new_vesting_shares = op[1].vesting_shares;
-            else
-              delegators.push({ delegator: op[1].delegator, vesting_shares: 0, new_vesting_shares: op[1].vesting_shares });
+            else {
+							delegator = { delegator: op[1].delegator, vesting_shares: 0, new_vesting_shares: op[1].vesting_shares };
+              delegators.push(delegator);
+						}
 
             // Save the updated list of delegators to disk
             saveDelegators();
