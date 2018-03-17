@@ -997,6 +997,7 @@ function logFailedBid(bid, message) {
     if (err)
       utils.log('Error saving failed bids to disk: ' + err);
   });
+}
 
 function loadConfig() {
   // Save the existing blacklist so it doesn't get overwritten
