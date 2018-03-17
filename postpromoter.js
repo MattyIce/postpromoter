@@ -246,9 +246,10 @@ function sendVote(bid, retries, callback) {
 
       // Try again on error
       if(retries < 2)
-        setTimeout(function() { sendVote(bid, retries + 1, callback); }, 3000);
+        setTimeout(function() { sendVote(bid, retries + 1, callback); }, 10000);
       else {
-        utils.log('============= Vote transaction failed three times for: ' + bid.permlink + ' ===============');
+        utils.log('============= Vote transaction failed three times for: @' + bid.author + '/' + bid.permlink + ' Bid Amount: ' + bid.amount + ' ' + bid.currency + ' ===============');
+        logFailedBid(bid, err);
 
         if (callback)
           callback();
@@ -384,7 +385,7 @@ function getTransactions(callback) {
 
             // Save the updated list of delegators to disk
             saveDelegators();
-						
+
 						// Check if we should send a delegation message
 						if(parseFloat(delegator.new_vesting_shares) > parseFloat(delegator.vesting_shares) && config.transfer_memos['delegation'] && config.transfer_memos['delegation'] != '')
 							refund(sender, 0.001, currency, 'delegation', utils.vestsToSP(parseFloat(delegator.new_vesting_shares)));
@@ -979,6 +980,23 @@ function loadPrices() {
 }
 
 function getUsdValue(bid) { return bid.amount * ((bid.currency == 'SBD') ? sbd_price : steem_price); }
+
+function logFailedBid(bid, message) {
+  if (message.indexOf('assert_exception') >= 0 && message.indexOf('ERR_ASSERTION') >= 0)
+    return;
+
+  var failed_bids = [];
+
+  if(fs.existsSync("failed-bids.json"))
+    failed_bids = JSON.parse(fs.readFileSync("failed-bids.json"));
+
+  bid.error = message;
+  failed_bids.push(bid);
+
+  fs.writeFile('failed-bids.json', JSON.stringify(failed_bids), function (err) {
+    if (err)
+      utils.log('Error saving failed bids to disk: ' + err);
+  });
 
 function loadConfig() {
   // Save the existing blacklist so it doesn't get overwritten
