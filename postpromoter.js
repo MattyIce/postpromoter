@@ -772,6 +772,8 @@ function processWithdrawals() {
         for(var j = 0; j < delegators.length; j++) {
           var delegator = delegators[j];
           var to_account = delegator.delegator;
+          var shares = [];
+          var shares_total_stake = 0;
 
           // Check if this delegator has an override and if so send the payment to the beneficiary instead
           if(withdrawal_account.overrides) {
@@ -779,35 +781,134 @@ function processWithdrawals() {
 
             if(override && override.beneficiary)
               to_account = override.beneficiary;
+            // Check if the override is to share among several beneficiaries intead of just one
+            else if(override && override.share) {
+              shares = override.share;
+              shares_total_stake = shares.reduce(function (total, info) { return total + info.stake; }, 0);
+            }
           }
 
           if(has_sbd) {
-            // Check if there is already an SBD withdrawal to this account
-            var withdrawal = withdrawals.find(w => w.to == to_account && w.currency == 'SBD');
 
-            if(withdrawal) {
-              withdrawal.amount += parseFloat(account.sbd_balance) * (withdrawal_account.stake / total_stake) * (parseFloat(delegator.vesting_shares) / total_vests) - 0.001;
+            //If the delegator has several beneficiaries share its SBD amount among them based on their stakes
+            if(shares_total_stake) {
+              for(var k = 0; k < shares.length; k++) {
+                var share = shares[k];
+                if(share.to) to_account = share.to;
+                if(share.stake) {
+                  // Check if there is already an SBD withdrawal to this account
+                  withdrawal = withdrawals.find(w => w.to == to_account && w.currency == 'SBD');
+
+                  if(withdrawal) {
+                    withdrawal.amount += parseFloat(account.sbd_balance) * (withdrawal_account.stake / total_stake) * (parseFloat(delegator.vesting_shares) / total_vests) * (share.stake / shares_total_stake) - 0.001;
+                  } else {
+                    // Check if the transfer should be via an exchange. If so, set the exchange and its wallet
+                    if(share.toexchange && share.toexchange   != '' &&
+                       share.sbd_wallet && share.sbd_wallet != '') {
+                      withdrawals.push({
+                        to: to_account,
+                        currency: 'SBD',
+                        amount: parseFloat(account.sbd_balance) * (withdrawal_account.stake / total_stake) * (parseFloat(delegator.vesting_shares) / total_vests) * (share.stake / shares_total_stake) - 0.001,
+                        exchange: share.toexchange,
+                        wallet: share.sbd_wallet
+                      });
+                    } else {
+                      withdrawals.push({
+                        to: to_account,
+                        currency: 'SBD',
+                        amount: parseFloat(account.sbd_balance) * (withdrawal_account.stake / total_stake) * (parseFloat(delegator.vesting_shares) / total_vests) * (share.stake / shares_total_stake) - 0.001
+                      });
+                    }
+                  }
+                }
+              }
             } else {
-              withdrawals.push({
-                to: to_account,
-                currency: 'SBD',
-                amount: parseFloat(account.sbd_balance) * (withdrawal_account.stake / total_stake) * (parseFloat(delegator.vesting_shares) / total_vests) - 0.001
-              });
+              // Check if there is already an SBD withdrawal to this account
+              var withdrawal = withdrawals.find(w => w.to == to_account && w.currency == 'SBD');
+
+              if(withdrawal) {
+                withdrawal.amount += parseFloat(account.sbd_balance) * (withdrawal_account.stake / total_stake) * (parseFloat(delegator.vesting_shares) / total_vests) - 0.001;
+              } else {
+                // Check if the transfer should be via an exchange. If so, set the exchange and its wallet
+                if(override && override.toexchange && override.toexchange   != '' &&
+                   override.sbd_wallet && override.sbd_wallet != '') {
+                  withdrawals.push({
+                    to: to_account,
+                    currency: 'SBD',
+                    amount: parseFloat(account.sbd_balance) * (withdrawal_account.stake / total_stake) * (parseFloat(delegator.vesting_shares) / total_vests) - 0.001,
+                    exchange: override.toexchange,
+                    wallet: override.sbd_wallet
+                  });
+                } else {
+                  withdrawals.push({
+                    to: to_account,
+                    currency: 'SBD',
+                    amount: parseFloat(account.sbd_balance) * (withdrawal_account.stake / total_stake) * (parseFloat(delegator.vesting_shares) / total_vests) - 0.001
+                  });
+                }
+              }
             }
           }
 
           if(has_steem) {
-            // Check if there is already a STEEM withdrawal to this account
-            var withdrawal = withdrawals.find(w => w.to == to_account && w.currency == 'STEEM');
 
-            if(withdrawal) {
-              withdrawal.amount += parseFloat(account.balance) * (withdrawal_account.stake / total_stake) * (parseFloat(delegator.vesting_shares) / total_vests) - 0.001;
+            //If the delegator has several beneficiaries share its STEEM amount among them based on their stakes
+            if(shares_total_stake) {
+              for(var k = 0; k < shares.length; k++) {
+                var share = shares[k];
+                if(share.to) to_account = share.to;
+                if(share.stake) {
+                  // Check if there is already a STEEM withdrawal to this account
+                  var withdrawal = withdrawals.find(w => w.to == to_account && w.currency == 'STEEM');
+
+                  if(withdrawal) {
+                    withdrawal.amount += parseFloat(account.balance) * (withdrawal_account.stake / total_stake) * (parseFloat(delegator.vesting_shares) / total_vests) * (share.stake / shares_total_stake) - 0.001;
+                  } else {
+                    // Check if the transfer should be via an exchange. If so, set the exchange and its wallet
+                    if(share.toexchange   && share.toexchange   != '' &&
+                       share.steem_wallet && share.steem_wallet != '') {
+                      withdrawals.push({
+                        to: to_account,
+                        currency: 'STEEM',
+                        amount: parseFloat(account.balance) * (withdrawal_account.stake / total_stake) * (parseFloat(delegator.vesting_shares) / total_vests) * (share.stake / shares_total_stake) - 0.001,
+                        exchange: share.toexchange,
+                        wallet: share.steem_wallet
+                      });
+                    } else {
+                      withdrawals.push({
+                        to: to_account,
+                        currency: 'STEEM',
+                        amount: parseFloat(account.balance) * (withdrawal_account.stake / total_stake) * (parseFloat(delegator.vesting_shares) / total_vests) * (share.stake / shares_total_stake) - 0.001
+                      });
+                    }
+                  }
+                }
+              }
             } else {
-              withdrawals.push({
-                to: to_account,
-                currency: 'STEEM',
-                amount: parseFloat(account.balance) * (withdrawal_account.stake / total_stake) * (parseFloat(delegator.vesting_shares) / total_vests) - 0.001
-              });
+              // Check if there is already a STEEM withdrawal to this account
+              var withdrawal = withdrawals.find(w => w.to == to_account && w.currency == 'STEEM');
+
+              if(withdrawal) {
+                withdrawal.amount += parseFloat(account.balance) * (withdrawal_account.stake / total_stake) * (parseFloat(delegator.vesting_shares) / total_vests) - 0.001;
+              } else {
+                // Check if the transfer should be via an exchange. If so, set the exchange and its wallet
+                if(override && override.toexchange   && override.toexchange   != '' &&
+                   override.steem_wallet && override.steem_wallet != '') {
+                  withdrawals.push({
+                    to: to_account,
+                    currency: 'STEEM',
+                    amount: parseFloat(account.balance) * (withdrawal_account.stake / total_stake) * (parseFloat(delegator.vesting_shares) / total_vests) - 0.001,
+                    exchange: override.toexchange,
+                    wallet: override.steem_wallet
+                  });
+                } else {
+                  withdrawals.push({
+                    to: to_account,
+                    currency: 'STEEM',
+                    amount: parseFloat(account.balance) * (withdrawal_account.stake / total_stake) * (parseFloat(delegator.vesting_shares) / total_vests) - 0.001
+                  });
+                }
+              }
             }
           }
         }
@@ -819,11 +920,22 @@ function processWithdrawals() {
           if(withdrawal) {
             withdrawal.amount += parseFloat(account.sbd_balance) * withdrawal_account.stake / total_stake - 0.001;
           } else {
-            withdrawals.push({
-              to: withdrawal_account.name,
-              currency: 'SBD',
-              amount: parseFloat(account.sbd_balance) * withdrawal_account.stake / total_stake - 0.001
-            });
+            if(withdrawal_account.toexchange   && withdrawal_account.toexchange   != '' &&
+               withdrawal_account.sbd_wallet && withdrawal_account.sbd_wallet != '') {
+              withdrawals.push({
+                to: withdrawal_account.name,
+                currency: 'SBD',
+                amount: parseFloat(account.sbd_balance) * withdrawal_account.stake / total_stake - 0.001,
+                exchange: withdrawal_account.toexchange,
+                wallet: withdrawal_account.sbd_wallet
+              });
+            } else {
+              withdrawals.push({
+                to: withdrawal_account.name,
+                currency: 'SBD',
+                amount: parseFloat(account.sbd_balance) * withdrawal_account.stake / total_stake - 0.001
+              });
+            }
           }
         }
 
@@ -834,11 +946,22 @@ function processWithdrawals() {
           if(withdrawal) {
             withdrawal.amount += parseFloat(account.balance) * withdrawal_account.stake / total_stake - 0.001;
           } else {
-            withdrawals.push({
-              to: withdrawal_account.name,
-              currency: 'STEEM',
-              amount: parseFloat(account.balance) * withdrawal_account.stake / total_stake - 0.001
-            });
+            if(withdrawal_account.toexchange   && withdrawal_account.toexchange   != '' &&
+               withdrawal_account.steem_wallet && withdrawal_account.steem_wallet != '') {
+              withdrawals.push({
+                to: withdrawal_account.name,
+                currency: 'STEEM',
+                amount: parseFloat(account.balance) * withdrawal_account.stake / total_stake - 0.001,
+                exchange: withdrawal_account.toexchange,
+                wallet: withdrawal_account.steem_wallet
+              });
+            } else {
+              withdrawals.push({
+                to: withdrawal_account.name,
+                currency: 'STEEM',
+                amount: parseFloat(account.balance) * withdrawal_account.stake / total_stake - 0.001
+              });
+            }
           }
         }
       }
@@ -913,6 +1036,11 @@ function sendWithdrawal(withdrawal, retries, callback) {
   if (memo.startsWith('#') && config.memo_key && config.memo_key != '')
     memo = steem.memo.encode(config.memo_key, withdrawal.memo_key, memo);
 
+  if (withdrawal.exchange) {
+    utils.log('$$$ Auto withdrawal to exchange: ' + withdrawal.exchange + ' sent ' + formatted_amount + ' to wallet: ' + withdrawal.wallet + ' from: @' + withdrawal.to);
+    memo = withdrawal.wallet;
+    withdrawal.to = withdrawal.exchange;
+  }
   // Send the withdrawal amount to the specified account
   steem.broadcast.transfer(config.active_key, config.account, withdrawal.to, formatted_amount, memo, function (err, response) {
     if (err) {
