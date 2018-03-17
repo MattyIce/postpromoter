@@ -388,7 +388,7 @@ function getTransactions(callback) {
 
 						// Check if we should send a delegation message
 						if(parseFloat(delegator.new_vesting_shares) > parseFloat(delegator.vesting_shares) && config.transfer_memos['delegation'] && config.transfer_memos['delegation'] != '')
-							refund(sender, 0.001, currency, 'delegation', utils.vestsToSP(parseFloat(delegator.new_vesting_shares)));
+							refund(op[1].delegator, 0.001, 'SBD', 'delegation', 0, utils.vestsToSP(parseFloat(delegator.new_vesting_shares)).toFixed());
 
             utils.log('*** Delegation Update - ' + op[1].delegator + ' has delegated ' + op[1].vesting_shares);
           }
