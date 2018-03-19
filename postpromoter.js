@@ -40,6 +40,7 @@ function startup() {
   if(config.api && config.api.enabled) {
     var express = require('express');
     var app = express();
+    var port = process.env.PORT || config.api.port
 
     app.use(function(req, res, next) {
       res.header("Access-Control-Allow-Origin", "*");
@@ -48,7 +49,7 @@ function startup() {
     });
 
     app.get('/api/bids', (req, res) => res.json({ current_round: outstanding_bids, last_round: last_round }));
-    app.listen(config.api.port, () => utils.log('API running on port ' + config.api.port))
+    app.listen(port, () => utils.log('API running on port ' + port))
   }
 
   // Check whether or not auto-withdrawals are set to be paid to delegators.
