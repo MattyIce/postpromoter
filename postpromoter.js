@@ -715,7 +715,7 @@ function claimRewards() {
           utils.log(rewards_message);
         }
 
-        // If there are liquid post rewards, withdraw them to the specified account
+        // If there are liquid SBD rewards, withdraw them to the specified account
         if(parseFloat(account.reward_sbd_balance) > 0 && config.post_rewards_withdrawal_account && config.post_rewards_withdrawal_account != '') {
 
           // Send liquid post rewards to the specified account
@@ -724,6 +724,19 @@ function claimRewards() {
               utils.log(err, response);
             else {
               utils.log('$$$ Auto withdrawal - liquid post rewards: ' + account.reward_sbd_balance + ' sent to @' + config.post_rewards_withdrawal_account);
+            }
+          });
+        }
+				
+				// If there are liquid STEEM rewards, withdraw them to the specified account
+        if(parseFloat(account.reward_steem_balance) > 0 && config.post_rewards_withdrawal_account && config.post_rewards_withdrawal_account != '') {
+
+          // Send liquid post rewards to the specified account
+          steem.broadcast.transfer(config.active_key, config.account, config.post_rewards_withdrawal_account, account.reward_steem_balance, 'Liquid Post Rewards Withdrawal', function (err, response) {
+            if (err)
+              utils.log(err, response);
+            else {
+              utils.log('$$$ Auto withdrawal - liquid post rewards: ' + account.reward_steem_balance + ' sent to @' + config.post_rewards_withdrawal_account);
             }
           });
         }
