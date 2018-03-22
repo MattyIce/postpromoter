@@ -52,6 +52,28 @@ function startup() {
     app.listen(port, () => utils.log('API running on port ' + port))
   }
 
+  // Check if bot state has been saved to disk, in which case load it
+  if (fs.existsSync('state.json')) {
+    var state = JSON.parse(fs.readFileSync("state.json"));
+
+    if (state.last_trans)
+      last_trans = state.last_trans;
+
+    if (state.outstanding_bids)
+      outstanding_bids = state.outstanding_bids;
+
+    if (state.last_round)
+      last_round = state.last_round;
+
+    if(state.last_withdrawal)
+      last_withdrawal = state.last_withdrawal;
+
+    if(state.version != version)
+      updateVersion(state.version, version);
+
+    utils.log('Restored saved bot state: ' + JSON.stringify({ last_trans: last_trans, bids: outstanding_bids.length, last_withdrawal: last_withdrawal }));
+  }
+
   // Check whether or not auto-withdrawals are set to be paid to delegators.
   use_delegators = config.auto_withdrawal && config.auto_withdrawal.active && config.auto_withdrawal.accounts.find(a => a.name == '$delegators');
 
@@ -76,25 +98,6 @@ function startup() {
         saveDelegators();
       });
     }
-  }
-
-  // Check if bot state has been saved to disk, in which case load it
-  if (fs.existsSync('state.json')) {
-    var state = JSON.parse(fs.readFileSync("state.json"));
-
-    if (state.last_trans)
-      last_trans = state.last_trans;
-
-    if (state.outstanding_bids)
-      outstanding_bids = state.outstanding_bids;
-
-    if (state.last_round)
-      last_round = state.last_round;
-
-    if(state.last_withdrawal)
-      last_withdrawal = state.last_withdrawal;
-
-    utils.log('Restored saved bot state: ' + JSON.stringify({ last_trans: last_trans, bids: outstanding_bids.length, last_withdrawal: last_withdrawal }));
   }
 
   // Schedule to run every 10 seconds
@@ -624,7 +627,8 @@ function saveState() {
     outstanding_bids: outstanding_bids,
     last_round: last_round,
     last_trans: last_trans,
-    last_withdrawal: last_withdrawal
+    last_withdrawal: last_withdrawal,
+    version: version
   };
 
   // Save the state of the bot to disk
@@ -632,6 +636,21 @@ function saveState() {
     if (err)
       utils.log(err);
   });
+}
+
+function updateVersion(old_version, new_version) {
+  utils.log('**** Performing Update Steps from version: ' + old_version + ' to version: ' + new_version);
+
+  if(!old_version) {
+    if(fs.existsSync('delegators.json')) {
+      fs.rename('delegators.json', 'old-delegators.json', (err) => {
+        if (err)
+          utils.log('Error renaming delegators file: ' + err);
+        else
+          utils.log('Renamed delegators.json file so it will be reloaded from account history.');
+      });
+    }
+  }
 }
 
 function saveDelegators() {
@@ -727,7 +746,7 @@ function claimRewards() {
             }
           });
         }
-				
+
 				// If there are liquid STEEM rewards, withdraw them to the specified account
         if(parseFloat(account.reward_steem_balance) > 0 && config.post_rewards_withdrawal_account && config.post_rewards_withdrawal_account != '') {
 
