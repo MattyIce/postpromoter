@@ -7,6 +7,7 @@ var last_trans = 0;
 var outstanding_bids = [];
 var delegators = [];
 var last_round = [];
+var next_round = [];
 var config = null;
 var first_load = true;
 var isVoting = false;
@@ -15,7 +16,7 @@ var use_delegators = false;
 var round_end_timeout = -1;
 var steem_price = 1;  // This will get overridden with actual prices if a price_feed_url is specified in settings
 var sbd_price = 1;    // This will get overridden with actual prices if a price_feed_url is specified in settings
-var version = '1.9.1';
+var version = '1.9.2';
 
 startup();
 
@@ -64,6 +65,9 @@ function startup() {
 
     if (state.last_round)
       last_round = state.last_round;
+
+    if (state.next_round)
+      next_round = state.next_round;
 
     if(state.last_withdrawal)
       last_withdrawal = state.last_withdrawal;
@@ -153,8 +157,11 @@ function startProcess() {
         // Save the last round of bids for use in API call
         last_round = outstanding_bids.slice();
 
-        // Reset the list of outstanding bids for the next round
-        outstanding_bids = [];
+        // Some bids might have been pushed to the next round, so now move them to the current round
+        outstanding_bids = next_round.slice();
+
+        // Reset the next round
+        next_round = [];
 
         // Send out earnings if frequency is set to every round
         if (config.auto_withdrawal.frequency == 'round_end')
@@ -371,9 +378,6 @@ function getTransactions(callback) {
             } else if(config.currencies_accepted && config.currencies_accepted.indexOf(currency) < 0) {
               // Sent an unsupported currency
               refund(op[1].from, amount, currency, 'invalid_currency');
-            } else if(checkRoundFillLimit(amount, currency)) {
-              // Bids are over ROI guarantee value
-              refund(op[1].from, amount, currency, 'round_full');
             } else {
               // Bid amount is just right!
               checkPost(op[1].memo, amount, currency, op[1].from, 0);
@@ -458,6 +462,8 @@ function checkPost(memo, amount, currency, sender, retries) {
       }
     }
 
+    var push_to_next_round = false;
+
     steem.api.getContent(author, permLink, function (err, result) {
         if (!err && result && result.id > 0) {
 
@@ -484,12 +490,6 @@ function checkPost(memo, amount, currency, sender, retries) {
             var created = new Date(result.created + 'Z');
             var time_until_vote = utils.timeTilFullPower(utils.getVotingPower(account));
 
-            // Check if this post is below the minimum post age
-            if(config.min_post_age && config.min_post_age > 0 && (new Date() - created + (time_until_vote * 1000)) < (config.min_post_age * 60 * 1000)) {
-              refund(sender, amount, currency, 'min_age');
-              return;
-            }
-
             // Get the list of votes on this post to make sure the bot didn't already vote on it (you'd be surprised how often people double-submit!)
             var votes = result.active_votes.filter(function(vote) { return vote.voter == account.name; });
 
@@ -500,13 +500,19 @@ function checkPost(memo, amount, currency, sender, retries) {
             }
 
             // Check if this post has been flagged by any flag signal accounts
-            if(config.flag_signal_accounts){
+            if(config.flag_signal_accounts) {
               var flags = result.active_votes.filter(function(v) { return v.percent < 0 && config.flag_signal_accounts.indexOf(v.voter) >= 0; });
 
               if(flags.length > 0) {
                 handleFlag(sender, amount, currency);
                 return;
               }
+            }
+
+            // Check if this post is below the minimum post age
+            if(config.min_post_age && config.min_post_age > 0 && (new Date() - created + (time_until_vote * 1000)) < (config.min_post_age * 60 * 1000)) {
+              push_to_next_round = true;
+              refund(sender, 0.001, currency, 'min_age');
             }
         } else if(result && result.id == 0) {
           // Invalid memo
@@ -526,8 +532,16 @@ function checkPost(memo, amount, currency, sender, retries) {
           }
         }
 
+        if(!push_to_next_round && checkRoundFillLimit(amount, currency)) {
+          push_to_next_round = true;
+          refund(sender, 0.001, currency, 'round_full');
+        }
+
+        // Add the bid to the current round or the next round if the current one is full or the post is too new
+        var round = push_to_next_round ? next_round : outstanding_bids;
+
         // Check if there is already a bid for this post in the current round
-        var existing_bid = outstanding_bids.find(bid => bid.url == result.url);
+        var existing_bid = round.find(bid => bid.url == result.url);
 
         if(existing_bid) {
           // There is already a bid for this post in the current round
@@ -553,7 +567,7 @@ function checkPost(memo, amount, currency, sender, retries) {
         } else {
           // All good - push to the array of valid bids for this round
           utils.log('Valid Bid - Amount: ' + amount + ' ' + currency + ', Title: ' + result.title);
-          outstanding_bids.push({ amount: amount, currency: currency, sender: sender, author: result.author, permlink: result.permlink, url: result.url });
+          round.push({ amount: amount, currency: currency, sender: sender, author: result.author, permlink: result.permlink, url: result.url });
         }
 
         // If a witness_vote transfer memo is set, check if the sender votes for the bot owner as witness and send them a message if not
@@ -626,6 +640,7 @@ function saveState() {
   var state = {
     outstanding_bids: outstanding_bids,
     last_round: last_round,
+    next_round: next_round,
     last_trans: last_trans,
     last_withdrawal: last_withdrawal,
     version: version
