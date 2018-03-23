@@ -121,63 +121,61 @@ function startProcess() {
     if (result && !err) {
       account = result[0];
 
-      if(!isVoting) {
-        // Check if there are any rewards to claim.
-        claimRewards();
+			if (account && !isVoting) {
+				// Load the current voting power of the account
+				var vp = utils.getVotingPower(account);
 
-        // Check if it is time to withdraw funds.
-        if (config.auto_withdrawal.frequency == 'daily')
-          checkAutoWithdraw();
-      }
+				if(config.detailed_logging) {
+					var bids_steem = utils.format(outstanding_bids.reduce(function(t, b) { return t + ((b.currency == 'STEEM') ? b.amount : 0); }, 0), 3);
+					var bids_sbd = utils.format(outstanding_bids.reduce(function(t, b) { return t + ((b.currency == 'SBD') ? b.amount : 0); }, 0), 3);
+					utils.log((config.backup_mode ? '* BACKUP MODE *' : '') + 'Voting Power: ' + utils.format(vp / 100) + '% | Time until next round: ' + utils.toTimer(utils.timeTilFullPower(vp)) + ' | Bids: ' + outstanding_bids.length + ' | ' + bids_sbd + ' SBD | ' + bids_steem + ' STEEM');
+				}
+
+				// We are at 100% voting power - time to vote!
+				if (vp >= 10000 && outstanding_bids.length > 0 && round_end_timeout < 0) {
+					round_end_timeout = setTimeout(function() {
+						round_end_timeout = -1;
+
+						// Don't process any bids while we are voting due to race condition (they will be processed when voting is done).
+						isVoting = first_load = true;
+
+						// Make a copy of the list of outstanding bids and vote on them
+						startVoting(outstanding_bids.slice().reverse());
+
+						// Save the last round of bids for use in API call
+						last_round = outstanding_bids.slice();
+
+						// Some bids might have been pushed to the next round, so now move them to the current round
+						outstanding_bids = next_round.slice();
+
+						// Reset the next round
+						next_round = [];
+
+						// Send out earnings if frequency is set to every round
+						if (config.auto_withdrawal.frequency == 'round_end')
+							processWithdrawals();
+
+						// Save the state of the bot to disk
+						saveState();
+					}, 30 * 1000);
+				}
+
+				// Load transactions to the bot account
+				getTransactions();
+
+				// Save the state of the bot to disk
+				saveState();
+				
+				// Check if there are any rewards to claim.
+				claimRewards();
+
+				// Check if it is time to withdraw funds.
+				if (config.auto_withdrawal.frequency == 'daily')
+					checkAutoWithdraw();
+			}
     } else
       logError('Error loading bot account: ' + err);
   });
-
-  if (account && !isVoting) {
-    // Load the current voting power of the account
-    var vp = utils.getVotingPower(account);
-
-    if(config.detailed_logging) {
-      var bids_steem = utils.format(outstanding_bids.reduce(function(t, b) { return t + ((b.currency == 'STEEM') ? b.amount : 0); }, 0), 3);
-      var bids_sbd = utils.format(outstanding_bids.reduce(function(t, b) { return t + ((b.currency == 'SBD') ? b.amount : 0); }, 0), 3);
-      utils.log((config.backup_mode ? '* BACKUP MODE *' : '') + 'Voting Power: ' + utils.format(vp / 100) + '% | Time until next round: ' + utils.toTimer(utils.timeTilFullPower(vp)) + ' | Bids: ' + outstanding_bids.length + ' | ' + bids_sbd + ' SBD | ' + bids_steem + ' STEEM');
-    }
-
-    // We are at 100% voting power - time to vote!
-    if (vp >= 10000 && outstanding_bids.length > 0 && round_end_timeout < 0) {
-      round_end_timeout = setTimeout(function() {
-        round_end_timeout = -1;
-
-        // Don't process any bids while we are voting due to race condition (they will be processed when voting is done).
-        isVoting = first_load = true;
-
-        // Make a copy of the list of outstanding bids and vote on them
-        startVoting(outstanding_bids.slice().reverse());
-
-        // Save the last round of bids for use in API call
-        last_round = outstanding_bids.slice();
-
-        // Some bids might have been pushed to the next round, so now move them to the current round
-        outstanding_bids = next_round.slice();
-
-        // Reset the next round
-        next_round = [];
-
-        // Send out earnings if frequency is set to every round
-        if (config.auto_withdrawal.frequency == 'round_end')
-          processWithdrawals();
-
-        // Save the state of the bot to disk
-        saveState();
-      }, 30 * 1000);
-    }
-
-    // Load transactions to the bot account
-    getTransactions();
-
-    // Save the state of the bot to disk
-    saveState();
-  }
 }
 
 function startVoting(bids) {
@@ -573,7 +571,7 @@ function checkPost(memo, amount, currency, sender, retries) {
         // If a witness_vote transfer memo is set, check if the sender votes for the bot owner as witness and send them a message if not
         if (config.transfer_memos['witness_vote'] && config.transfer_memos['witness_vote'] != '') {
           checkWitnessVote(sender, sender, currency);
-        } else if(config.transfer_memos['bid_confirmation'] && config.transfer_memos['bid_confirmation'] != '') {
+        } else if(!push_to_next_round && config.transfer_memos['bid_confirmation'] && config.transfer_memos['bid_confirmation'] != '') {
 					// Send bid confirmation transfer memo if one is specified
 					refund(sender, 0.001, currency, 'bid_confirmation', 0);
 				}
