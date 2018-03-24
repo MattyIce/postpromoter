@@ -72,8 +72,9 @@ function startup() {
     if(state.last_withdrawal)
       last_withdrawal = state.last_withdrawal;
 
-    if(state.version != version)
-      updateVersion(state.version, version);
+		// Removed this for now since api.steemit.com is not returning more than 30 days of account history!
+    //if(state.version != version)
+    //  updateVersion(state.version, version);
 
     utils.log('Restored saved bot state: ' + JSON.stringify({ last_trans: last_trans, bids: outstanding_bids.length, last_withdrawal: last_withdrawal }));
   }
