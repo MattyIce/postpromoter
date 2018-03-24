@@ -684,7 +684,7 @@ function refund(sender, amount, currency, reason, retries, data) {
     retries = 0;
 
   // Make sure refunds are enabled and the sender isn't on the no-refund list (for exchanges and things like that).
-  if (!config.refunds_enabled || sender == config.account || (config.no_refund && config.no_refund.indexOf(sender) >= 0)) {
+  if (reason != 'forward_payment' && (!config.refunds_enabled || sender == config.account || (config.no_refund && config.no_refund.indexOf(sender) >= 0))) {
     utils.log("Invalid bid - " + reason + ' NO REFUND');
 
     // If this is a payment from an account on the no_refund list, forward the payment to the post_rewards_withdrawal_account
