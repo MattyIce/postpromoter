@@ -44,7 +44,7 @@
         ]
       },
       {
-        "name": "account2",
+        "name": "yabapmatt",
         "stake": 2000
       }
     ],
@@ -64,7 +64,7 @@
     "no_comments": "Refund for invalid bid: {amount} - Bids not allowed on comments.",
     "already_voted": "Refund for invalid bid: {amount} - Bot already voted on this post.",
     "max_age": "Refund for invalid bid: {amount} - Posts cannot be older than {max_age}.",
-    "min_age": "Refund for invalid bid: {amount} - Posts cannot be less than {min_age} minutes old.",
+    "min_age": "Your bid has been added to the following round since the post is less than {min_age} minutes old.",
     "invalid_post_url": "Refund for invalid bid: {amount} - Invalid post URL in memo.",
     "blacklist_refund": "Refund for invalid bid: {amount} - The author of this post is on the blacklist.",
     "blacklist_no_refund": "Bid is invalid - The author of this post is on the blacklist.",
@@ -73,7 +73,7 @@
     "flag_no_refund": "Bid is invalid - This post has been flagged by one or more spam / abuse indicator accounts.",
     "blacklist_tag": "Bid is invalid - This post contains the [{tag}] tag which is not allowed by this bot.",
     "bids_per_round": "Bid is invalid - This author already has the maximum number of allowed bids in this round.",
-    "round_full": "The current bidding round is full. Please try again next round!",
+    "round_full": "The current bidding round is full. Your bid has been submitted into the following round.",
     "forward_payment": "Payment forwarded from @{tag}."
   }
 }

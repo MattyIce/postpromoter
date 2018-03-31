@@ -7,6 +7,7 @@ var last_trans = 0;
 var outstanding_bids = [];
 var delegators = [];
 var last_round = [];
+var next_round = [];
 var config = null;
 var first_load = true;
 var isVoting = false;
@@ -15,7 +16,7 @@ var use_delegators = false;
 var round_end_timeout = -1;
 var steem_price = 1;  // This will get overridden with actual prices if a price_feed_url is specified in settings
 var sbd_price = 1;    // This will get overridden with actual prices if a price_feed_url is specified in settings
-var version = '1.9.0';
+var version = '1.9.2';
 
 startup();
 
@@ -40,6 +41,7 @@ function startup() {
   if(config.api && config.api.enabled) {
     var express = require('express');
     var app = express();
+    var port = process.env.PORT || config.api.port
 
     app.use(function(req, res, next) {
       res.header("Access-Control-Allow-Origin", "*");
@@ -48,7 +50,33 @@ function startup() {
     });
 
     app.get('/api/bids', (req, res) => res.json({ current_round: outstanding_bids, last_round: last_round }));
-    app.listen(config.api.port, () => utils.log('API running on port ' + config.api.port))
+    app.listen(port, () => utils.log('API running on port ' + port))
+  }
+
+  // Check if bot state has been saved to disk, in which case load it
+  if (fs.existsSync('state.json')) {
+    var state = JSON.parse(fs.readFileSync("state.json"));
+
+    if (state.last_trans)
+      last_trans = state.last_trans;
+
+    if (state.outstanding_bids)
+      outstanding_bids = state.outstanding_bids;
+
+    if (state.last_round)
+      last_round = state.last_round;
+
+    if (state.next_round)
+      next_round = state.next_round;
+
+    if(state.last_withdrawal)
+      last_withdrawal = state.last_withdrawal;
+
+		// Removed this for now since api.steemit.com is not returning more than 30 days of account history!
+    //if(state.version != version)
+    //  updateVersion(state.version, version);
+
+    utils.log('Restored saved bot state: ' + JSON.stringify({ last_trans: last_trans, bids: outstanding_bids.length, last_withdrawal: last_withdrawal }));
   }
 
   // Check whether or not auto-withdrawals are set to be paid to delegators.
@@ -77,25 +105,6 @@ function startup() {
     }
   }
 
-  // Check if bot state has been saved to disk, in which case load it
-  if (fs.existsSync('state.json')) {
-    var state = JSON.parse(fs.readFileSync("state.json"));
-
-    if (state.last_trans)
-      last_trans = state.last_trans;
-
-    if (state.outstanding_bids)
-      outstanding_bids = state.outstanding_bids;
-
-    if (state.last_round)
-      last_round = state.last_round;
-
-    if(state.last_withdrawal)
-      last_withdrawal = state.last_withdrawal;
-
-    utils.log('Restored saved bot state: ' + JSON.stringify({ last_trans: last_trans, bids: outstanding_bids.length, last_withdrawal: last_withdrawal }));
-  }
-
   // Schedule to run every 10 seconds
   setInterval(startProcess, 10000);
 
@@ -113,60 +122,61 @@ function startProcess() {
     if (result && !err) {
       account = result[0];
 
-      if(!isVoting) {
-        // Check if there are any rewards to claim.
-        claimRewards();
+			if (account && !isVoting) {
+				// Load the current voting power of the account
+				var vp = utils.getVotingPower(account);
 
-        // Check if it is time to withdraw funds.
-        if (config.auto_withdrawal.frequency == 'daily')
-          checkAutoWithdraw();
-      }
+				if(config.detailed_logging) {
+					var bids_steem = utils.format(outstanding_bids.reduce(function(t, b) { return t + ((b.currency == 'STEEM') ? b.amount : 0); }, 0), 3);
+					var bids_sbd = utils.format(outstanding_bids.reduce(function(t, b) { return t + ((b.currency == 'SBD') ? b.amount : 0); }, 0), 3);
+					utils.log((config.backup_mode ? '* BACKUP MODE *' : '') + 'Voting Power: ' + utils.format(vp / 100) + '% | Time until next round: ' + utils.toTimer(utils.timeTilFullPower(vp)) + ' | Bids: ' + outstanding_bids.length + ' | ' + bids_sbd + ' SBD | ' + bids_steem + ' STEEM');
+				}
+
+				// We are at 100% voting power - time to vote!
+				if (vp >= 10000 && outstanding_bids.length > 0 && round_end_timeout < 0) {
+					round_end_timeout = setTimeout(function() {
+						round_end_timeout = -1;
+
+						// Don't process any bids while we are voting due to race condition (they will be processed when voting is done).
+						isVoting = first_load = true;
+
+						// Make a copy of the list of outstanding bids and vote on them
+						startVoting(outstanding_bids.slice().reverse());
+
+						// Save the last round of bids for use in API call
+						last_round = outstanding_bids.slice();
+
+						// Some bids might have been pushed to the next round, so now move them to the current round
+						outstanding_bids = next_round.slice();
+
+						// Reset the next round
+						next_round = [];
+
+						// Send out earnings if frequency is set to every round
+						if (config.auto_withdrawal.frequency == 'round_end')
+							processWithdrawals();
+
+						// Save the state of the bot to disk
+						saveState();
+					}, 30 * 1000);
+				}
+
+				// Load transactions to the bot account
+				getTransactions();
+
+				// Save the state of the bot to disk
+				saveState();
+				
+				// Check if there are any rewards to claim.
+				claimRewards();
+
+				// Check if it is time to withdraw funds.
+				if (config.auto_withdrawal.frequency == 'daily')
+					checkAutoWithdraw();
+			}
     } else
       logError('Error loading bot account: ' + err);
   });
-
-  if (account && !isVoting) {
-    // Load the current voting power of the account
-    var vp = utils.getVotingPower(account);
-
-    if(config.detailed_logging) {
-      var bids_steem = utils.format(outstanding_bids.reduce(function(t, b) { return t + ((b.currency == 'STEEM') ? b.amount : 0); }, 0), 3);
-      var bids_sbd = utils.format(outstanding_bids.reduce(function(t, b) { return t + ((b.currency == 'SBD') ? b.amount : 0); }, 0), 3);
-      utils.log((config.backup_mode ? '* BACKUP MODE *' : '') + 'Voting Power: ' + utils.format(vp / 100) + '% | Time until next round: ' + utils.toTimer(utils.timeTilFullPower(vp)) + ' | Bids: ' + outstanding_bids.length + ' | ' + bids_sbd + ' SBD | ' + bids_steem + ' STEEM');
-    }
-
-    // We are at 100% voting power - time to vote!
-    if (vp >= 10000 && outstanding_bids.length > 0 && round_end_timeout < 0) {
-      round_end_timeout = setTimeout(function() {
-        round_end_timeout = -1;
-
-        // Don't process any bids while we are voting due to race condition (they will be processed when voting is done).
-        isVoting = first_load = true;
-
-        // Make a copy of the list of outstanding bids and vote on them
-        startVoting(outstanding_bids.slice().reverse());
-
-        // Save the last round of bids for use in API call
-        last_round = outstanding_bids.slice();
-
-        // Reset the list of outstanding bids for the next round
-        outstanding_bids = [];
-
-        // Send out earnings if frequency is set to every round
-        if (config.auto_withdrawal.frequency == 'round_end')
-          processWithdrawals();
-
-        // Save the state of the bot to disk
-        saveState();
-      }, 30 * 1000);
-    }
-
-    // Load transactions to the bot account
-    getTransactions();
-
-    // Save the state of the bot to disk
-    saveState();
-  }
 }
 
 function startVoting(bids) {
@@ -246,9 +256,10 @@ function sendVote(bid, retries, callback) {
 
       // Try again on error
       if(retries < 2)
-        setTimeout(function() { sendVote(bid, retries + 1, callback); }, 3000);
+        setTimeout(function() { sendVote(bid, retries + 1, callback); }, 10000);
       else {
-        utils.log('============= Vote transaction failed three times for: ' + bid.permlink + ' ===============');
+        utils.log('============= Vote transaction failed three times for: @' + bid.author + '/' + bid.permlink + ' Bid Amount: ' + bid.amount + ' ' + bid.currency + ' ===============');
+        logFailedBid(bid, err);
 
         if (callback)
           callback();
@@ -366,9 +377,6 @@ function getTransactions(callback) {
             } else if(config.currencies_accepted && config.currencies_accepted.indexOf(currency) < 0) {
               // Sent an unsupported currency
               refund(op[1].from, amount, currency, 'invalid_currency');
-            } else if(checkRoundFillLimit(amount, currency)) {
-              // Bids are over ROI guarantee value
-              refund(op[1].from, amount, currency, 'round_full');
             } else {
               // Bid amount is just right!
               checkPost(op[1].memo, amount, currency, op[1].from, 0);
@@ -379,11 +387,17 @@ function getTransactions(callback) {
 
             if(delegator)
               delegator.new_vesting_shares = op[1].vesting_shares;
-            else
-              delegators.push({ delegator: op[1].delegator, vesting_shares: 0, new_vesting_shares: op[1].vesting_shares });
+            else {
+							delegator = { delegator: op[1].delegator, vesting_shares: 0, new_vesting_shares: op[1].vesting_shares };
+              delegators.push(delegator);
+						}
 
             // Save the updated list of delegators to disk
             saveDelegators();
+
+						// Check if we should send a delegation message
+						if(parseFloat(delegator.new_vesting_shares) > parseFloat(delegator.vesting_shares) && config.transfer_memos['delegation'] && config.transfer_memos['delegation'] != '')
+							refund(op[1].delegator, 0.001, 'SBD', 'delegation', 0, utils.vestsToSP(parseFloat(delegator.new_vesting_shares)).toFixed());
 
             utils.log('*** Delegation Update - ' + op[1].delegator + ' has delegated ' + op[1].vesting_shares);
           }
@@ -447,6 +461,8 @@ function checkPost(memo, amount, currency, sender, retries) {
       }
     }
 
+    var push_to_next_round = false;
+
     steem.api.getContent(author, permLink, function (err, result) {
         if (!err && result && result.id > 0) {
 
@@ -473,12 +489,6 @@ function checkPost(memo, amount, currency, sender, retries) {
             var created = new Date(result.created + 'Z');
             var time_until_vote = utils.timeTilFullPower(utils.getVotingPower(account));
 
-            // Check if this post is below the minimum post age
-            if(config.min_post_age && config.min_post_age > 0 && (new Date() - created + (time_until_vote * 1000)) < (config.min_post_age * 60 * 1000)) {
-              refund(sender, amount, currency, 'min_age');
-              return;
-            }
-
             // Get the list of votes on this post to make sure the bot didn't already vote on it (you'd be surprised how often people double-submit!)
             var votes = result.active_votes.filter(function(vote) { return vote.voter == account.name; });
 
@@ -489,13 +499,19 @@ function checkPost(memo, amount, currency, sender, retries) {
             }
 
             // Check if this post has been flagged by any flag signal accounts
-            if(config.flag_signal_accounts){
+            if(config.flag_signal_accounts) {
               var flags = result.active_votes.filter(function(v) { return v.percent < 0 && config.flag_signal_accounts.indexOf(v.voter) >= 0; });
 
               if(flags.length > 0) {
                 handleFlag(sender, amount, currency);
                 return;
               }
+            }
+
+            // Check if this post is below the minimum post age
+            if(config.min_post_age && config.min_post_age > 0 && (new Date() - created + (time_until_vote * 1000)) < (config.min_post_age * 60 * 1000)) {
+              push_to_next_round = true;
+              refund(sender, 0.001, currency, 'min_age');
             }
         } else if(result && result.id == 0) {
           // Invalid memo
@@ -515,8 +531,16 @@ function checkPost(memo, amount, currency, sender, retries) {
           }
         }
 
+        if(!push_to_next_round && checkRoundFillLimit(amount, currency)) {
+          push_to_next_round = true;
+          refund(sender, 0.001, currency, 'round_full');
+        }
+
+        // Add the bid to the current round or the next round if the current one is full or the post is too new
+        var round = push_to_next_round ? next_round : outstanding_bids;
+
         // Check if there is already a bid for this post in the current round
-        var existing_bid = outstanding_bids.find(bid => bid.url == result.url);
+        var existing_bid = round.find(bid => bid.url == result.url);
 
         if(existing_bid) {
           // There is already a bid for this post in the current round
@@ -542,13 +566,16 @@ function checkPost(memo, amount, currency, sender, retries) {
         } else {
           // All good - push to the array of valid bids for this round
           utils.log('Valid Bid - Amount: ' + amount + ' ' + currency + ', Title: ' + result.title);
-          outstanding_bids.push({ amount: amount, currency: currency, sender: sender, author: result.author, permlink: result.permlink, url: result.url });
+          round.push({ amount: amount, currency: currency, sender: sender, author: result.author, permlink: result.permlink, url: result.url });
         }
 
         // If a witness_vote transfer memo is set, check if the sender votes for the bot owner as witness and send them a message if not
         if (config.transfer_memos['witness_vote'] && config.transfer_memos['witness_vote'] != '') {
           checkWitnessVote(sender, sender, currency);
-        }
+        } else if(!push_to_next_round && config.transfer_memos['bid_confirmation'] && config.transfer_memos['bid_confirmation'] != '') {
+					// Send bid confirmation transfer memo if one is specified
+					refund(sender, 0.001, currency, 'bid_confirmation', 0);
+				}
     });
 }
 
@@ -599,6 +626,10 @@ function checkWitnessVote(sender, voter, currency) {
 
       if(result[0].witness_votes.indexOf(config.owner_account) < 0)
         refund(sender, 0.001, currency, 'witness_vote', 0);
+		  else if(config.transfer_memos['bid_confirmation'] && config.transfer_memos['bid_confirmation'] != '') {
+				// Send bid confirmation transfer memo if one is specified
+				refund(sender, 0.001, currency, 'bid_confirmation', 0);
+			}
     } else
       logError('Error loading sender account to check witness vote: ' + err);
   });
@@ -608,8 +639,10 @@ function saveState() {
   var state = {
     outstanding_bids: outstanding_bids,
     last_round: last_round,
+    next_round: next_round,
     last_trans: last_trans,
-    last_withdrawal: last_withdrawal
+    last_withdrawal: last_withdrawal,
+    version: version
   };
 
   // Save the state of the bot to disk
@@ -617,6 +650,21 @@ function saveState() {
     if (err)
       utils.log(err);
   });
+}
+
+function updateVersion(old_version, new_version) {
+  utils.log('**** Performing Update Steps from version: ' + old_version + ' to version: ' + new_version);
+
+  if(!old_version) {
+    if(fs.existsSync('delegators.json')) {
+      fs.rename('delegators.json', 'old-delegators.json', (err) => {
+        if (err)
+          utils.log('Error renaming delegators file: ' + err);
+        else
+          utils.log('Renamed delegators.json file so it will be reloaded from account history.');
+      });
+    }
+  }
 }
 
 function saveDelegators() {
@@ -637,7 +685,7 @@ function refund(sender, amount, currency, reason, retries, data) {
     retries = 0;
 
   // Make sure refunds are enabled and the sender isn't on the no-refund list (for exchanges and things like that).
-  if (!config.refunds_enabled || sender == config.account || (config.no_refund && config.no_refund.indexOf(sender) >= 0)) {
+  if (reason != 'forward_payment' && (!config.refunds_enabled || sender == config.account || (config.no_refund && config.no_refund.indexOf(sender) >= 0))) {
     utils.log("Invalid bid - " + reason + ' NO REFUND');
 
     // If this is a payment from an account on the no_refund list, forward the payment to the post_rewards_withdrawal_account
@@ -656,6 +704,7 @@ function refund(sender, amount, currency, reason, retries, data) {
   memo = memo.replace(/{account}/g, config.account);
   memo = memo.replace(/{owner}/g, config.owner_account);
   memo = memo.replace(/{min_age}/g, config.min_post_age);
+	memo = memo.replace(/{sender}/g, sender);
   memo = memo.replace(/{tag}/g, data);
 
   var days = Math.floor(config.max_post_age / 24);
@@ -699,7 +748,7 @@ function claimRewards() {
           utils.log(rewards_message);
         }
 
-        // If there are liquid post rewards, withdraw them to the specified account
+        // If there are liquid SBD rewards, withdraw them to the specified account
         if(parseFloat(account.reward_sbd_balance) > 0 && config.post_rewards_withdrawal_account && config.post_rewards_withdrawal_account != '') {
 
           // Send liquid post rewards to the specified account
@@ -708,6 +757,19 @@ function claimRewards() {
               utils.log(err, response);
             else {
               utils.log('$$$ Auto withdrawal - liquid post rewards: ' + account.reward_sbd_balance + ' sent to @' + config.post_rewards_withdrawal_account);
+            }
+          });
+        }
+
+				// If there are liquid STEEM rewards, withdraw them to the specified account
+        if(parseFloat(account.reward_steem_balance) > 0 && config.post_rewards_withdrawal_account && config.post_rewards_withdrawal_account != '') {
+
+          // Send liquid post rewards to the specified account
+          steem.broadcast.transfer(config.active_key, config.account, config.post_rewards_withdrawal_account, account.reward_steem_balance, 'Liquid Post Rewards Withdrawal', function (err, response) {
+            if (err)
+              utils.log(err, response);
+            else {
+              utils.log('$$$ Auto withdrawal - liquid post rewards: ' + account.reward_steem_balance + ' sent to @' + config.post_rewards_withdrawal_account);
             }
           });
         }
@@ -1095,6 +1157,24 @@ function loadPrices() {
 }
 
 function getUsdValue(bid) { return bid.amount * ((bid.currency == 'SBD') ? sbd_price : steem_price); }
+
+function logFailedBid(bid, message) {
+  if (message.indexOf('assert_exception') >= 0 && message.indexOf('ERR_ASSERTION') >= 0)
+    return;
+
+  var failed_bids = [];
+
+  if(fs.existsSync("failed-bids.json"))
+    failed_bids = JSON.parse(fs.readFileSync("failed-bids.json"));
+
+  bid.error = message;
+  failed_bids.push(bid);
+
+  fs.writeFile('failed-bids.json', JSON.stringify(failed_bids), function (err) {
+    if (err)
+      utils.log('Error saving failed bids to disk: ' + err);
+  });
+}
 
 function loadConfig() {
   // Save the existing blacklist so it doesn't get overwritten
