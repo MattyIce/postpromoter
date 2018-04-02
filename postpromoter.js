@@ -166,7 +166,7 @@ function startProcess() {
 
 				// Save the state of the bot to disk
 				saveState();
-				
+
 				// Check if there are any rewards to claim.
 				claimRewards();
 
@@ -999,9 +999,6 @@ function sendWithdrawal(withdrawal, retries, callback) {
 }
 
 function loadPrices() {
-  if (config.currencies_accepted.length <= 1)
-    return;
-
   // Require the "request" library for making HTTP requests
   var request = require("request");
 
