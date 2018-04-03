@@ -8,6 +8,8 @@ var outstanding_bids = [];
 var delegators = [];
 var last_round = [];
 var next_round = [];
+var blacklist = [];
+var whitelist = [];
 var config = null;
 var first_load = true;
 var isVoting = false;
@@ -16,7 +18,7 @@ var use_delegators = false;
 var round_end_timeout = -1;
 var steem_price = 1;  // This will get overridden with actual prices if a price_feed_url is specified in settings
 var sbd_price = 1;    // This will get overridden with actual prices if a price_feed_url is specified in settings
-var version = '1.9.2';
+var version = '1.9.3';
 
 startup();
 
@@ -446,9 +448,15 @@ function checkPost(memo, amount, currency, sender, retries) {
     }
 
     // Make sure the author isn't on the blacklist!
-    if(config.blacklist && (config.blacklist.indexOf(author) >= 0 || config.blacklist.indexOf(sender) >= 0))
+    if(whitelist.indexOf(author) < 0 && (blacklist.indexOf(author) >= 0 || blacklist.indexOf(sender) >= 0))
     {
       handleBlacklist(author, sender, amount, currency);
+      return;
+    }
+
+    // If this bot is whitelist-only then make sure the author is on the whitelist
+    if(config.blacklist_settings.whitelist_only && whitelist.indexOf(author) < 0) {
+      refund(sender, amount, currency, 'whitelist_only');
       return;
     }
 
@@ -473,11 +481,11 @@ function checkPost(memo, amount, currency, sender, retries) {
             }
 
             // Check if any tags on this post are blacklisted in the settings
-            if (config.blacklisted_tags && config.blacklisted_tags.length > 0 && result.json_metadata && result.json_metadata != '') {
+            if (config.blacklist_settings.blacklisted_tags && config.blacklist_settings.blacklisted_tags.length > 0 && result.json_metadata && result.json_metadata != '') {
               var tags = JSON.parse(result.json_metadata).tags;
 
               if (tags && tags.length > 0) {
-                var tag = tags.find(t => config.blacklisted_tags.indexOf(t) >= 0);
+                var tag = tags.find(t => config.blacklist_settings.blacklisted_tags.indexOf(t) >= 0);
 
                 if(tag) {
                   refund(sender, amount, currency, 'blacklist_tag', 0, tag);
@@ -499,8 +507,8 @@ function checkPost(memo, amount, currency, sender, retries) {
             }
 
             // Check if this post has been flagged by any flag signal accounts
-            if(config.flag_signal_accounts) {
-              var flags = result.active_votes.filter(function(v) { return v.percent < 0 && config.flag_signal_accounts.indexOf(v.voter) >= 0; });
+            if(config.blacklist_settings.flag_signal_accounts) {
+              var flags = result.active_votes.filter(function(v) { return v.percent < 0 && config.blacklist_settings.flag_signal_accounts.indexOf(v.voter) >= 0; });
 
               if(flags.length > 0) {
                 handleFlag(sender, amount, currency);
@@ -583,7 +591,7 @@ function handleBlacklist(author, sender, amount, currency) {
   utils.log('Invalid Bid - @' + author + ' is on the blacklist!');
 
   // Refund the bid only if blacklist_refunds are enabled in config
-  if (config.refund_blacklist)
+  if (config.blacklist_settings.refund_blacklist)
     refund(sender, amount, currency, 'blacklist_refund', 0);
   else {
     // Otherwise just send a 0.001 transaction with blacklist memo
@@ -591,8 +599,8 @@ function handleBlacklist(author, sender, amount, currency) {
       refund(sender, 0.001, currency, 'blacklist_no_refund', 0);
 
     // If a blacklist donation account is specified then send funds from blacklisted users there
-    if (config.blacklist_donation_account && config.blacklist_donation_account != '')
-      refund(config.blacklist_donation_account, amount - 0.001, currency, 'blacklist_donation', 0);
+    if (config.blacklist_settings.blacklist_donation_account)
+      refund(config.blacklist_settings.blacklist_donation_account, amount - 0.001, currency, 'blacklist_donation', 0);
   }
 }
 
@@ -600,7 +608,7 @@ function handleFlag(sender, amount, currency) {
   utils.log('Invalid Bid - This post has been flagged by one or more spam / abuse indicator accounts.');
 
   // Refund the bid only if blacklist_refunds are enabled in config
-  if (config.refund_blacklist)
+  if (config.blacklist_settings.refund_blacklist)
     refund(sender, amount, currency, 'flag_refund', 0);
   else {
     // Otherwise just send a 0.001 transaction with blacklist memo
@@ -608,8 +616,8 @@ function handleFlag(sender, amount, currency) {
       refund(sender, 0.001, currency, 'flag_no_refund', 0);
 
     // If a blacklist donation account is specified then send funds from blacklisted users there
-    if (config.blacklist_donation_account && config.blacklist_donation_account != '')
-      refund(config.blacklist_donation_account, amount - 0.001, currency, 'blacklist_donation', 0);
+    if (config.blacklist_settings.blacklist_donation_account)
+      refund(config.blacklist_settings.blacklist_donation_account, amount - 0.001, currency, 'blacklist_donation', 0);
   }
 }
 
@@ -1046,32 +1054,43 @@ function logFailedBid(bid, message) {
 }
 
 function loadConfig() {
-  // Save the existing blacklist so it doesn't get overwritten
-  var blacklist = [];
-  if (config && config.blacklist)
-    blacklist = config.blacklist;
-
   config = JSON.parse(fs.readFileSync("config.json"));
 
-  // Restore the existing blacklist in case there's an issue loading it again
-  config.blacklist = blacklist;
-
-  var location = (config.blacklist_location && config.blacklist_location != '') ? config.blacklist_location : 'blacklist';
-
-  if (location.startsWith('http://') || location.startsWith('https://')) {
-    // Require the "request" library for making HTTP requests
-    var request = require("request");
-
-    request.get(location, function (e, r, data) {
-      try {
-        config.blacklist = data.replace(/[\r]/g, '').split('\n');
-      } catch (err) {
-        utils.log('Error loading blacklist from: ' + location + ', Error: ' + err);
-      }
-    });
-  } else if (fs.existsSync(location)) {
-    config.blacklist = fs.readFileSync(location, "utf8").replace(/[\r]/g, '').split('\n');
+  // Backwards compatibility for blacklist settings
+  if(!config.blacklist_settings) {
+    config.blacklist_settings = {
+      flag_signal_accounts: config.flag_signal_accounts,
+      blacklist_location: config.blacklist_location ? config.blacklist_location : 'blacklist',
+      refund_blacklist: config.refund_blacklist,
+      blacklist_donation_account: config.blacklist_donation_account,
+      blacklisted_tags: config.blacklisted_tags
+    };
   }
+
+  var newBlacklist = [];
+
+  // Load the blacklist
+  utils.loadUserList(config.blacklist_settings.blacklist_location, function(list1) {
+    var list = [];
+
+    if(list1)
+      list = list1;
+
+    // Load the shared blacklist
+    utils.loadUserList(config.blacklist_settings.shared_blacklist_location, function(list2) {
+      if(list2)
+        list = list.concat(list2.filter(i => list.indexOf(i) < 0));
+
+      if(list1 || list2)
+        blacklist = list;
+    });
+  });
+
+  // Load the whitelist
+  utils.loadUserList(config.blacklist_settings.whitelist_location, function(list) {
+    if(list)
+      whitelist = list;
+  });
 }
 
 function failover() {

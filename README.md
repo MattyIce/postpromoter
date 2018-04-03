@@ -46,13 +46,18 @@ Then set the following options in config.json:
   "refunds_enabled": true,
   "min_refund_amount": 0.002, // This will prevent refunds for transfer memos
   "no_refund": ["bittrex", "poloniex", "openledger", "blocktrades", "minnowbooster"], // Don't refund transactions from these accounts!
-  "flag_signal_accounts": ["spaminator", "cheetah", "steemcleaners", "mack-bot", "blacklist-a"], // If any accounts on this list has flagged the post at the time the bid comes in it will be treated as blacklisted
-  "comment_location": "comment.md", // The location of a markdown file containing the comment that should be left after the bot votes on a post. Leave this null or blank for no comment.
-  "blacklist_location": "blacklist", // The location of the blacklist file containing one blacklisted Steem account name per line
-  "refund_blacklist": true,	// Whether or not to refund blacklisted users' bids
-  "blacklist_donation_account": "steemcleaners", // If "refund_blacklist" is false, then this will send all bids from blacklisted users to the specified account as a donation
-  "blacklisted_tags": ["nsfw", "other-tag"], // List of post tags that are not allowed by the bot. Bids for posts with one or more tags in this list will be refunded
   "max_per_author_per_round": 1, // Limit to the number of posts that can be voted on for a particular author each round
+  "comment_location": "comment.md", // The location of a markdown file containing the comment that should be left after the bot votes on a post. Leave this null or blank for no comment.
+  "blacklist_settings": {
+    "flag_signal_accounts": ["spaminator", "cheetah", "steemcleaners", "mack-bot", "blacklist-a"], // If any accounts on this list has flagged the post at the time the bid comes in it will be treated as blacklisted
+    "blacklist_location": "blacklist", // The location of the blacklist file containing one blacklisted Steem account name per line
+    "shared_blacklist_location": "http://somesite.org/steemblacklist",  // The location of a shared blacklist URL which just returns a text file containing one blacklisted Steem account name per line
+    "whitelist_location": "whitelist", // The location of the whitelist file containing one blacklisted Steem account name per line, this will override the blacklist
+    "whitelist_only": false,  // Whether or not the bot will only allow bids for posts by whitelisted accounts
+    "refund_blacklist": true,	// Whether or not to refund blacklisted users' bids
+    "blacklist_donation_account": "steemcleaners", // If "refund_blacklist" is false, then this will send all bids from blacklisted users to the specified account as a donation
+    "blacklisted_tags": ["nsfw", "other-tag"], // List of post tags that are not allowed by the bot. Bids for posts with one or more tags in this list will be refunded
+  }
   "auto_withdrawal": {
     "active": true, // Activate the auto withdrawal function (will withdraw all accepted currencies)
     "accounts": [	// List of accounts to receive daily withdrawals and the amount to send to each
@@ -96,7 +101,8 @@ Then set the following options in config.json:
     "round_full": "The current bidding round is full. Your bid has been submitted into the following round.",
     "forward_payment": "Payment forwarded from @{tag}."
 		"bid_confirmation": "Your bid is confirmed. You will receive your vote when the bot reaches 100% voting power. Thank you!",
-		"delegation": "Thank you for your delegation of {tag} SP! You will start to receive payouts after the next withdrawal."
+		"delegation": "Thank you for your delegation of {tag} SP! You will start to receive payouts after the next withdrawal.",
+    "whitelist_only": "Bid is invalid - Only posts by whitelisted authors are accepted by this bot."
   }
 }
 ```
