@@ -28,6 +28,9 @@
   "no_refund": ["bittrex", "poloniex", "openledger", "blocktrades", "minnowbooster", "ginabot"],
   "comment_location": "comment.md",
   "max_per_author_per_round": 1,
+  "allow_tag_promotion": true,
+  "promoted_tags":["blockchain","neo","cn"],
+  "promote_ratio": 0.5,
   "blacklist_settings": {
     "flag_signal_accounts": ["spaminator", "cheetah", "steemcleaners", "mack-bot", "blacklist-a"],
     "blacklist_location": "blacklist",
