@@ -352,6 +352,10 @@ function getTransactions(callback) {
       var trans = result[i];
       var op = trans[1].op;
 
+        if(trans[0] > last_trans + 1) {
+          utils.log('***** MISSED TRANSACTION(S) - last_trans: ' + last_trans + ', current_trans: ' + trans[0]);
+        }
+
         // Check that this is a new transaction that we haven't processed already
         if(trans[0] > last_trans) {
 
@@ -1119,7 +1123,7 @@ function logError(message) {
   if (message.indexOf('assert_exception') < 0 && message.indexOf('ERR_ASSERTION') < 0)
     error_count++;
 
-  utils.log('Error Count: ' + error_count);
+  utils.log('Error Count: ' + error_count + ', Current node: ' + steem.api.options.url);
   utils.log(message);
 }
 

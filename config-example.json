@@ -29,7 +29,7 @@
   "comment_location": "comment.md",
   "max_per_author_per_round": 1,
   "blacklist_settings": {
-    "flag_signal_accounts": ["spaminator", "cheetah", "steemcleaners", "mack-bot", "blacklist-a"],
+    "flag_signal_accounts": ["spaminator", "cheetah", "steemcleaners", "mack-bot"],
     "blacklist_location": "blacklist",
     "shared_blacklist_location": "",
     "whitelist_location": "",
