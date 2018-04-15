@@ -1136,3 +1136,12 @@ function checkErrors() {
   error_count = 0;
 }
 setInterval(checkErrors, 60 * 1000);
+
+function handle_exit_signals(signal) {
+  utils.log(`Received ${signal}. Shutting down`);
+  saveState();
+  process.exit();
+}
+
+process.on('SIGINT', handle_exit_signals.bind(null, 'SIGINT'));
+process.on('SIGTERM', handle_exit_signals.bind(null, 'SIGTERM'));
