@@ -660,7 +660,7 @@ function saveState() {
   };
 
   // Save the state of the bot to disk
-  fs.writeFile('state.json', JSON.stringify(state), function (err) {
+  fs.writeFileSync('state.json', JSON.stringify(state), function (err) {
     if (err)
       utils.log(err);
   });
