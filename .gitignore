@@ -64,3 +64,4 @@ typings/
 # other
 .sublime-project
 delegators.json
+whitelist.txt

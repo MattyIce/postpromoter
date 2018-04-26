@@ -18,7 +18,7 @@ var use_delegators = false;
 var round_end_timeout = -1;
 var steem_price = 1;  // This will get overridden with actual prices if a price_feed_url is specified in settings
 var sbd_price = 1;    // This will get overridden with actual prices if a price_feed_url is specified in settings
-var version = '1.9.3';
+var version = '1.9.4';
 
 startup();
 
@@ -368,6 +368,7 @@ function getTransactions(callback) {
             // Check for min and max bid values in configuration settings
             var min_bid = config.min_bid ? parseFloat(config.min_bid) : 0;
             var max_bid = config.max_bid ? parseFloat(config.max_bid) : 9999;
+            var max_bid_whitelist = config.max_bid_whitelist ? parseFloat(config.max_bid_whitelist) : 9999;
 
             if(config.disabled_mode) {
               // Bot is disabled, refund all Bids
@@ -379,9 +380,12 @@ function getTransactions(callback) {
               else {
                 utils.log('Invalid bid - below min bid amount and too small to refund.');
               }
-            } else if (amount > max_bid) {
+            } else if (amount > max_bid && whitelist.indexOf(op[1].from) < 0) {
               // Bid amount is too high
               refund(op[1].from, amount, currency, 'above_max_bid');
+            } else if (amount > max_bid_whitelist) {
+              // Bid amount is too high even for whitelisted users!
+              refund(op[1].from, amount, currency, 'above_max_bid_whitelist');
             } else if(config.currencies_accepted && config.currencies_accepted.indexOf(currency) < 0) {
               // Sent an unsupported currency
               refund(op[1].from, amount, currency, 'invalid_currency');
@@ -715,6 +719,7 @@ function refund(sender, amount, currency, reason, retries, data) {
   memo = memo.replace(/{currency}/g, currency);
   memo = memo.replace(/{min_bid}/g, config.min_bid);
   memo = memo.replace(/{max_bid}/g, config.max_bid);
+  memo = memo.replace(/{max_bid_whitelist}/g, config.max_bid_whitelist);
   memo = memo.replace(/{account}/g, config.account);
   memo = memo.replace(/{owner}/g, config.owner_account);
   memo = memo.replace(/{min_age}/g, config.min_post_age);
@@ -1101,6 +1106,9 @@ function loadConfig() {
 
 function failover() {
   if(config.rpc_nodes && config.rpc_nodes.length > 1) {
+    // Give it a minute after the failover to account for more errors coming in from the original node
+    setTimeout(function() { error_count = 0; }, 60 * 1000);
+
     var cur_node_index = config.rpc_nodes.indexOf(steem.api.options.url) + 1;
 
     if(cur_node_index == config.rpc_nodes.length)
@@ -1127,7 +1135,7 @@ function logError(message) {
   utils.log(message);
 }
 
-// Check if too many errors have happened in a 1-minute period and fail over to next rpc node
+// Check if 10+ errors have happened in a 3-minute period and fail over to next rpc node
 function checkErrors() {
   if(error_count >= 10)
     failover();
@@ -1135,4 +1143,4 @@ function checkErrors() {
   // Reset the error counter
   error_count = 0;
 }
-setInterval(checkErrors, 60 * 1000);
+setInterval(checkErrors, 3 * 60 * 1000);
