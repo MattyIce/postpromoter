@@ -1047,21 +1047,27 @@ function loadPrices() {
 function getUsdValue(bid) { return bid.amount * ((bid.currency == 'SBD') ? sbd_price : steem_price); }
 
 function logFailedBid(bid, message) {
-  if (message.indexOf('assert_exception') >= 0 && message.indexOf('ERR_ASSERTION') >= 0)
-    return;
+  try {
+    message = JSON.stringify(message);
 
-  var failed_bids = [];
+    if (message.indexOf('assert_exception') >= 0 && message.indexOf('ERR_ASSERTION') >= 0)
+      return;
 
-  if(fs.existsSync("failed-bids.json"))
-    failed_bids = JSON.parse(fs.readFileSync("failed-bids.json"));
+    var failed_bids = [];
 
-  bid.error = message;
-  failed_bids.push(bid);
+    if(fs.existsSync("failed-bids.json"))
+      failed_bids = JSON.parse(fs.readFileSync("failed-bids.json"));
 
-  fs.writeFile('failed-bids.json', JSON.stringify(failed_bids), function (err) {
-    if (err)
-      utils.log('Error saving failed bids to disk: ' + err);
-  });
+    bid.error = message;
+    failed_bids.push(bid);
+
+    fs.writeFile('failed-bids.json', JSON.stringify(failed_bids), function (err) {
+      if (err)
+        utils.log('Error saving failed bids to disk: ' + err);
+    });
+  } catch (err) {
+    utils.log(err);
+  }
 }
 
 function loadConfig() {
