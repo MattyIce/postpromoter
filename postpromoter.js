@@ -3,7 +3,7 @@ const steem = require('steem');
 var utils = require('./utils');
 
 var account = null;
-var last_trans = 0;
+var transactions = [];
 var outstanding_bids = [];
 var delegators = [];
 var last_round = [];
@@ -18,7 +18,7 @@ var use_delegators = false;
 var round_end_timeout = -1;
 var steem_price = 1;  // This will get overridden with actual prices if a price_feed_url is specified in settings
 var sbd_price = 1;    // This will get overridden with actual prices if a price_feed_url is specified in settings
-var version = '1.9.4';
+var version = '2.0.0';
 
 startup();
 
@@ -59,8 +59,8 @@ function startup() {
   if (fs.existsSync('state.json')) {
     var state = JSON.parse(fs.readFileSync("state.json"));
 
-    if (state.last_trans)
-      last_trans = state.last_trans;
+    if (state.transactions)
+      transactions = state.transactions;
 
     if (state.outstanding_bids)
       outstanding_bids = state.outstanding_bids;
@@ -78,7 +78,7 @@ function startup() {
     //if(state.version != version)
     //  updateVersion(state.version, version);
 
-    utils.log('Restored saved bot state: ' + JSON.stringify({ last_trans: last_trans, bids: outstanding_bids.length, last_withdrawal: last_withdrawal }));
+    utils.log('Restored saved bot state: ' + JSON.stringify({ last_trx_id: (transactions.length > 0 ? transactions[transactions.length - 1] : ''), bids: outstanding_bids.length, last_withdrawal: last_withdrawal }));
   }
 
   // Check whether or not auto-withdrawals are set to be paid to delegators.
@@ -164,11 +164,8 @@ function startProcess() {
 				}
 
 				// Load transactions to the bot account
-				getTransactions();
-
-				// Save the state of the bot to disk
-				saveState();
-
+        getTransactions(saveState);
+        
 				// Check if there are any rewards to claim.
 				claimRewards();
 
@@ -322,23 +319,22 @@ function resteem(bid) {
 }
 
 function getTransactions(callback) {
+  var last_trx_id = null;
   var num_trans = 50;
 
   // If this is the first time the bot is ever being run, start with just the most recent transaction
-  if (first_load && last_trans == 0) {
+  if (first_load && transactions.length == 0) {
     utils.log('First run - starting with last transaction on account.');
-    num_trans = 1;
   }
 
   // If this is the first time the bot is run after a restart get a larger list of transactions to make sure none are missed
-  if (first_load && last_trans > 0) {
-    utils.log('First run - loading all transactions since bot was stopped.');
+  if (first_load && transactions.length > 0) {
+    utils.log('First run - loading all transactions since last transaction processed: ' + transactions[transactions.length - 1]);
+    last_trx_id = transactions[transactions.length - 1];
     num_trans = 1000;
   }
 
   steem.api.getAccountHistory(account.name, -1, num_trans, function (err, result) {
-    first_load = false;
-
     if (err || !result) {
       logError('Error loading account history: ' + err);
 
@@ -348,75 +344,97 @@ function getTransactions(callback) {
       return;
     }
 
+    // On first load, just record the list of the past 50 transactions so we don't double-process them.
+    if (first_load && transactions.length == 0) {
+      transactions = result.map(r => r[1].trx_id).filter(t => t != '0000000000000000000000000000000000000000');
+      first_load = false;
+
+      if(callback)
+        callback();
+
+      return;
+    }
+
+    first_load = false;
+    var reached_starting_trx = false;
+
     for (var i = 0; i < result.length; i++) {
       var trans = result[i];
       var op = trans[1].op;
 
-        if(trans[0] > last_trans + 1) {
-          utils.log('***** MISSED TRANSACTION(S) - last_trans: ' + last_trans + ', current_trans: ' + trans[0]);
+      // Check that this is a new transaction that we haven't processed already
+      if(transactions.indexOf(trans[1].trx_id) < 0) {
+
+        // If the bot was restarted after being stopped for a while, don't process transactions until we're past the last trx_id that was processed
+        if(last_trx_id && !reached_starting_trx) {
+          if(trans[1].trx_id == last_trx_id)
+            reached_starting_trx = true;
+
+          continue;
         }
 
-        // Check that this is a new transaction that we haven't processed already
-        if(trans[0] > last_trans) {
+        if(config.debug_logging)
+          utils.log('Processing Transaction: ' + JSON.stringify(trans));
 
-          // We only care about transfers to the bot
-          if (op[0] == 'transfer' && op[1].to == account.name) {
-            var amount = parseFloat(op[1].amount);
-            var currency = utils.getCurrency(op[1].amount);
-            utils.log("Incoming Bid! From: " + op[1].from + ", Amount: " + op[1].amount + ", memo: " + op[1].memo);
+        // We only care about transfers to the bot
+        if (op[0] == 'transfer' && op[1].to == config.account) {
+          var amount = parseFloat(op[1].amount);
+          var currency = utils.getCurrency(op[1].amount);
+          utils.log("Incoming Bid! From: " + op[1].from + ", Amount: " + op[1].amount + ", memo: " + op[1].memo);
 
-            // Check for min and max bid values in configuration settings
-            var min_bid = config.min_bid ? parseFloat(config.min_bid) : 0;
-            var max_bid = config.max_bid ? parseFloat(config.max_bid) : 9999;
-            var max_bid_whitelist = config.max_bid_whitelist ? parseFloat(config.max_bid_whitelist) : 9999;
+          // Check for min and max bid values in configuration settings
+          var min_bid = config.min_bid ? parseFloat(config.min_bid) : 0;
+          var max_bid = config.max_bid ? parseFloat(config.max_bid) : 9999;
+          var max_bid_whitelist = config.max_bid_whitelist ? parseFloat(config.max_bid_whitelist) : 9999;
 
-            if(config.disabled_mode) {
-              // Bot is disabled, refund all Bids
-              refund(op[1].from, amount, currency, 'bot_disabled');
-            } else if(amount < min_bid) {
-              // Bid amount is too low (make sure it's above the min_refund_amount setting)
-              if(!config.min_refund_amount || amount >= config.min_refund_amount)
-                refund(op[1].from, amount, currency, 'below_min_bid');
-              else {
-                utils.log('Invalid bid - below min bid amount and too small to refund.');
-              }
-            } else if (amount > max_bid && whitelist.indexOf(op[1].from) < 0) {
-              // Bid amount is too high
-              refund(op[1].from, amount, currency, 'above_max_bid');
-            } else if (amount > max_bid_whitelist) {
-              // Bid amount is too high even for whitelisted users!
-              refund(op[1].from, amount, currency, 'above_max_bid_whitelist');
-            } else if(config.currencies_accepted && config.currencies_accepted.indexOf(currency) < 0) {
-              // Sent an unsupported currency
-              refund(op[1].from, amount, currency, 'invalid_currency');
-            } else {
-              // Bid amount is just right!
-              checkPost(op[1].memo, amount, currency, op[1].from, 0);
-            }
-          } else if(use_delegators && op[0] == 'delegate_vesting_shares' && op[1].delegatee == account.name) {
-            // If we are paying out to delegators, then update the list of delegators when new delegation transactions come in
-            var delegator = delegators.find(d => d.delegator == op[1].delegator);
-
-            if(delegator)
-              delegator.new_vesting_shares = op[1].vesting_shares;
+          if(config.disabled_mode) {
+            // Bot is disabled, refund all Bids
+            refund(op[1].from, amount, currency, 'bot_disabled');
+          } else if(amount < min_bid) {
+            // Bid amount is too low (make sure it's above the min_refund_amount setting)
+            if(!config.min_refund_amount || amount >= config.min_refund_amount)
+              refund(op[1].from, amount, currency, 'below_min_bid');
             else {
-							delegator = { delegator: op[1].delegator, vesting_shares: 0, new_vesting_shares: op[1].vesting_shares };
-              delegators.push(delegator);
-						}
+              utils.log('Invalid bid - below min bid amount and too small to refund.');
+            }
+          } else if (amount > max_bid && whitelist.indexOf(op[1].from) < 0) {
+            // Bid amount is too high
+            refund(op[1].from, amount, currency, 'above_max_bid');
+          } else if (amount > max_bid_whitelist) {
+            // Bid amount is too high even for whitelisted users!
+            refund(op[1].from, amount, currency, 'above_max_bid_whitelist');
+          } else if(config.currencies_accepted && config.currencies_accepted.indexOf(currency) < 0) {
+            // Sent an unsupported currency
+            refund(op[1].from, amount, currency, 'invalid_currency');
+          } else {
+            // Bid amount is just right!
+            checkPost(op[1].memo, amount, currency, op[1].from, 0);
+          }
+        } else if(use_delegators && op[0] == 'delegate_vesting_shares' && op[1].delegatee == account.name) {
+          // If we are paying out to delegators, then update the list of delegators when new delegation transactions come in
+          var delegator = delegators.find(d => d.delegator == op[1].delegator);
 
-            // Save the updated list of delegators to disk
-            saveDelegators();
-
-						// Check if we should send a delegation message
-						if(parseFloat(delegator.new_vesting_shares) > parseFloat(delegator.vesting_shares) && config.transfer_memos['delegation'] && config.transfer_memos['delegation'] != '')
-							refund(op[1].delegator, 0.001, 'SBD', 'delegation', 0, utils.vestsToSP(parseFloat(delegator.new_vesting_shares)).toFixed());
-
-            utils.log('*** Delegation Update - ' + op[1].delegator + ' has delegated ' + op[1].vesting_shares);
+          if(delegator)
+            delegator.new_vesting_shares = op[1].vesting_shares;
+          else {
+            delegator = { delegator: op[1].delegator, vesting_shares: 0, new_vesting_shares: op[1].vesting_shares };
+            delegators.push(delegator);
           }
 
-          // Save the ID of the last transaction that was processed.
-          last_trans = trans[0];
+          // Save the updated list of delegators to disk
+          saveDelegators();
+
+          // Check if we should send a delegation message
+          if(parseFloat(delegator.new_vesting_shares) > parseFloat(delegator.vesting_shares) && config.transfer_memos['delegation'] && config.transfer_memos['delegation'] != '')
+            refund(op[1].delegator, 0.001, 'SBD', 'delegation', 0, utils.vestsToSP(parseFloat(delegator.new_vesting_shares)).toFixed());
+
+          utils.log('*** Delegation Update - ' + op[1].delegator + ' has delegated ' + op[1].vesting_shares);
         }
+
+        // Save the ID of the last transaction that was processed.
+        transactions.push(trans[1].trx_id);
+        transactions.shift();
+      }
     }
 
     if (callback)
@@ -658,13 +676,13 @@ function saveState() {
     outstanding_bids: outstanding_bids,
     last_round: last_round,
     next_round: next_round,
-    last_trans: last_trans,
+    transactions: transactions,
     last_withdrawal: last_withdrawal,
     version: version
   };
 
   // Save the state of the bot to disk
-  fs.writeFile('state.json', JSON.stringify(state), function (err) {
+  fs.writeFile('state.json', JSON.stringify(state, null, 2), function (err) {
     if (err)
       utils.log(err);
   });
