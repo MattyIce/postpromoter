@@ -349,6 +349,8 @@ function getTransactions(callback) {
       transactions = result.map(r => r[1].trx_id).filter(t => t != '0000000000000000000000000000000000000000');
       first_load = false;
 
+      utils.log(transactions.length + ' previous trx_ids recorded.');
+
       if(callback)
         callback();
 
@@ -361,6 +363,10 @@ function getTransactions(callback) {
     for (var i = 0; i < result.length; i++) {
       var trans = result[i];
       var op = trans[1].op;
+
+      // Don't need to process virtual ops
+      if(trans[1].trx_id == '0000000000000000000000000000000000000000')
+        continue;
 
       // Check that this is a new transaction that we haven't processed already
       if(transactions.indexOf(trans[1].trx_id) < 0) {
@@ -433,7 +439,10 @@ function getTransactions(callback) {
 
         // Save the ID of the last transaction that was processed.
         transactions.push(trans[1].trx_id);
-        transactions.shift();
+
+        // Don't save more than the last 60 transaction IDs in the state
+        if(transactions.length > 60)
+          transactions.shift();
       }
     }
 
