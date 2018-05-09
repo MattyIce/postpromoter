@@ -3,13 +3,11 @@ const steem = require('steem');
 var utils = require('./utils');
 
 var account = null;
-var transactions = [];
+var last_trans = 0;
 var outstanding_bids = [];
 var delegators = [];
 var last_round = [];
 var next_round = [];
-var blacklist = [];
-var whitelist = [];
 var config = null;
 var first_load = true;
 var isVoting = false;
@@ -18,7 +16,7 @@ var use_delegators = false;
 var round_end_timeout = -1;
 var steem_price = 1;  // This will get overridden with actual prices if a price_feed_url is specified in settings
 var sbd_price = 1;    // This will get overridden with actual prices if a price_feed_url is specified in settings
-var version = '2.0.0';
+var version = '1.9.2';
 
 startup();
 
@@ -59,8 +57,8 @@ function startup() {
   if (fs.existsSync('state.json')) {
     var state = JSON.parse(fs.readFileSync("state.json"));
 
-    if (state.transactions)
-      transactions = state.transactions;
+    if (state.last_trans)
+      last_trans = state.last_trans;
 
     if (state.outstanding_bids)
       outstanding_bids = state.outstanding_bids;
@@ -78,7 +76,7 @@ function startup() {
     //if(state.version != version)
     //  updateVersion(state.version, version);
 
-    utils.log('Restored saved bot state: ' + JSON.stringify({ last_trx_id: (transactions.length > 0 ? transactions[transactions.length - 1] : ''), bids: outstanding_bids.length, last_withdrawal: last_withdrawal }));
+    utils.log('Restored saved bot state: ' + JSON.stringify({ last_trans: last_trans, bids: outstanding_bids.length, last_withdrawal: last_withdrawal }));
   }
 
   // Check whether or not auto-withdrawals are set to be paid to delegators.
@@ -132,6 +130,7 @@ function startProcess() {
 					var bids_steem = utils.format(outstanding_bids.reduce(function(t, b) { return t + ((b.currency == 'STEEM') ? b.amount : 0); }, 0), 3);
 					var bids_sbd = utils.format(outstanding_bids.reduce(function(t, b) { return t + ((b.currency == 'SBD') ? b.amount : 0); }, 0), 3);
 					utils.log((config.backup_mode ? '* BACKUP MODE *' : '') + 'Voting Power: ' + utils.format(vp / 100) + '% | Time until next round: ' + utils.toTimer(utils.timeTilFullPower(vp)) + ' | Bids: ' + outstanding_bids.length + ' | ' + bids_sbd + ' SBD | ' + bids_steem + ' STEEM');
+
 				}
 
 				// We are at 100% voting power - time to vote!
@@ -149,10 +148,20 @@ function startProcess() {
 						last_round = outstanding_bids.slice();
 
 						// Some bids might have been pushed to the next round, so now move them to the current round
-						outstanding_bids = next_round.slice();
+						outstanding_bids = [];
+						var nrlen = next_round.length;
+						for(var i = 0; i < nrlen; i++) {
+							var bid_to_cur = next_round.shift();
+							if(checkRoundFillLimit(bid_to_cur.amount, bid_to_cur.currency)) {
+								next_round.push(bid_to_cur);
+							} else {
+								outstanding_bids.push(bid_to_cur);
+							}
+						}
+						//outstanding_bids = next_round.slice();
 
 						// Reset the next round
-						next_round = [];
+						//next_round = [];
 
 						// Send out earnings if frequency is set to every round
 						if (config.auto_withdrawal.frequency == 'round_end')
@@ -164,8 +173,11 @@ function startProcess() {
 				}
 
 				// Load transactions to the bot account
-        getTransactions(saveState);
-        
+				getTransactions();
+
+				// Save the state of the bot to disk
+				saveState();
+				
 				// Check if there are any rewards to claim.
 				claimRewards();
 
@@ -190,10 +202,8 @@ function startVoting(bids) {
     return total + getUsdValue(bid);
   }, 0);
 
-  var bids_steem = utils.format(outstanding_bids.reduce(function(t, b) { return t + ((b.currency == 'STEEM') ? b.amount : 0); }, 0), 3);
-  var bids_sbd = utils.format(outstanding_bids.reduce(function(t, b) { return t + ((b.currency == 'SBD') ? b.amount : 0); }, 0), 3);
   utils.log('=======================================================');
-  utils.log('Bidding Round End! Starting to vote! Total bids: ' + bids.length + ' - $' + total + ' | ' + bids_sbd + ' SBD | ' + bids_steem + ' STEEM');
+  utils.log('Bidding Round End! Starting to vote! Total bids: ' + bids.length + ' - $' + total);
 
   var adjusted_weight = 1;
 
@@ -319,22 +329,23 @@ function resteem(bid) {
 }
 
 function getTransactions(callback) {
-  var last_trx_id = null;
   var num_trans = 50;
 
   // If this is the first time the bot is ever being run, start with just the most recent transaction
-  if (first_load && transactions.length == 0) {
+  if (first_load && last_trans == 0) {
     utils.log('First run - starting with last transaction on account.');
+    num_trans = 1;
   }
 
   // If this is the first time the bot is run after a restart get a larger list of transactions to make sure none are missed
-  if (first_load && transactions.length > 0) {
-    utils.log('First run - loading all transactions since last transaction processed: ' + transactions[transactions.length - 1]);
-    last_trx_id = transactions[transactions.length - 1];
+  if (first_load && last_trans > 0) {
+    utils.log('First run - loading all transactions since bot was stopped.');
     num_trans = 1000;
   }
 
   steem.api.getAccountHistory(account.name, -1, num_trans, function (err, result) {
+    first_load = false;
+
     if (err || !result) {
       logError('Error loading account history: ' + err);
 
@@ -344,106 +355,67 @@ function getTransactions(callback) {
       return;
     }
 
-    // On first load, just record the list of the past 50 transactions so we don't double-process them.
-    if (first_load && transactions.length == 0) {
-      transactions = result.map(r => r[1].trx_id).filter(t => t != '0000000000000000000000000000000000000000');
-      first_load = false;
-
-      utils.log(transactions.length + ' previous trx_ids recorded.');
-
-      if(callback)
-        callback();
-
-      return;
-    }
-
-    first_load = false;
-    var reached_starting_trx = false;
-
     for (var i = 0; i < result.length; i++) {
       var trans = result[i];
       var op = trans[1].op;
 
-      // Don't need to process virtual ops
-      if(trans[1].trx_id == '0000000000000000000000000000000000000000')
-        continue;
+        // Check that this is a new transaction that we haven't processed already
+        if(trans[0] > last_trans) {
 
-      // Check that this is a new transaction that we haven't processed already
-      if(transactions.indexOf(trans[1].trx_id) < 0) {
+          // We only care about transfers to the bot
+          if (op[0] == 'transfer' && op[1].to == account.name) {
+            var amount = parseFloat(op[1].amount);
+            var currency = utils.getCurrency(op[1].amount);
+            utils.log("Incoming Bid! From: " + op[1].from + ", Amount: " + op[1].amount + ", memo: " + op[1].memo);
 
-        // If the bot was restarted after being stopped for a while, don't process transactions until we're past the last trx_id that was processed
-        if(last_trx_id && !reached_starting_trx) {
-          if(trans[1].trx_id == last_trx_id)
-            reached_starting_trx = true;
+            // Check for min and max bid values in configuration settings
+            var min_bid = config.min_bid ? parseFloat(config.min_bid) : 0;
+            var max_bid = config.max_bid ? parseFloat(config.max_bid) : 9999;
 
-          continue;
-        }
-
-        if(config.debug_logging)
-          utils.log('Processing Transaction: ' + JSON.stringify(trans));
-
-        // We only care about transfers to the bot
-        if (op[0] == 'transfer' && op[1].to == config.account) {
-          var amount = parseFloat(op[1].amount);
-          var currency = utils.getCurrency(op[1].amount);
-          utils.log("Incoming Bid! From: " + op[1].from + ", Amount: " + op[1].amount + ", memo: " + op[1].memo);
-
-          // Check for min and max bid values in configuration settings
-          var min_bid = config.min_bid ? parseFloat(config.min_bid) : 0;
-          var max_bid = config.max_bid ? parseFloat(config.max_bid) : 9999;
-          var max_bid_whitelist = config.max_bid_whitelist ? parseFloat(config.max_bid_whitelist) : 9999;
-
-          if(config.disabled_mode) {
-            // Bot is disabled, refund all Bids
-            refund(op[1].from, amount, currency, 'bot_disabled');
-          } else if(amount < min_bid) {
-            // Bid amount is too low (make sure it's above the min_refund_amount setting)
-            if(!config.min_refund_amount || amount >= config.min_refund_amount)
-              refund(op[1].from, amount, currency, 'below_min_bid');
-            else {
-              utils.log('Invalid bid - below min bid amount and too small to refund.');
+            if(config.disabled_mode) {
+              // Bot is disabled, refund all Bids
+              refund(op[1].from, amount, currency, 'bot_disabled');
+            } else if(amount < min_bid) {
+              // Bid amount is too low (make sure it's above the min_refund_amount setting)
+              if(!config.min_refund_amount || amount >= config.min_refund_amount)
+                refund(op[1].from, amount, currency, 'below_min_bid');
+              else {
+                utils.log('Invalid bid - below min bid amount and too small to refund.');
+              }
+            } else if (amount > max_bid) {
+              // Bid amount is too high
+              refund(op[1].from, amount, currency, 'above_max_bid');
+            } else if(config.currencies_accepted && config.currencies_accepted.indexOf(currency) < 0) {
+              // Sent an unsupported currency
+              refund(op[1].from, amount, currency, 'invalid_currency');
+            } else {
+              // Bid amount is just right!
+              checkPost(op[1].memo, amount, currency, op[1].from, 0);
             }
-          } else if (amount > max_bid && whitelist.indexOf(op[1].from) < 0) {
-            // Bid amount is too high
-            refund(op[1].from, amount, currency, 'above_max_bid');
-          } else if (amount > max_bid_whitelist) {
-            // Bid amount is too high even for whitelisted users!
-            refund(op[1].from, amount, currency, 'above_max_bid_whitelist');
-          } else if(config.currencies_accepted && config.currencies_accepted.indexOf(currency) < 0) {
-            // Sent an unsupported currency
-            refund(op[1].from, amount, currency, 'invalid_currency');
-          } else {
-            // Bid amount is just right!
-            checkPost(op[1].memo, amount, currency, op[1].from, 0);
-          }
-        } else if(use_delegators && op[0] == 'delegate_vesting_shares' && op[1].delegatee == account.name) {
-          // If we are paying out to delegators, then update the list of delegators when new delegation transactions come in
-          var delegator = delegators.find(d => d.delegator == op[1].delegator);
+          } else if(use_delegators && op[0] == 'delegate_vesting_shares' && op[1].delegatee == account.name) {
+            // If we are paying out to delegators, then update the list of delegators when new delegation transactions come in
+            var delegator = delegators.find(d => d.delegator == op[1].delegator);
 
-          if(delegator)
-            delegator.new_vesting_shares = op[1].vesting_shares;
-          else {
-            delegator = { delegator: op[1].delegator, vesting_shares: 0, new_vesting_shares: op[1].vesting_shares };
-            delegators.push(delegator);
+            if(delegator)
+              delegator.new_vesting_shares = op[1].vesting_shares;
+            else {
+							delegator = { delegator: op[1].delegator, vesting_shares: 0, new_vesting_shares: op[1].vesting_shares };
+              delegators.push(delegator);
+						}
+
+            // Save the updated list of delegators to disk
+            saveDelegators();
+
+						// Check if we should send a delegation message
+						if(parseFloat(delegator.new_vesting_shares) > parseFloat(delegator.vesting_shares) && config.transfer_memos['delegation'] && config.transfer_memos['delegation'] != '')
+							refund(op[1].delegator, 0.001, 'SBD', 'delegation', 0, utils.vestsToSP(parseFloat(delegator.new_vesting_shares)).toFixed());
+
+            utils.log('*** Delegation Update - ' + op[1].delegator + ' has delegated ' + op[1].vesting_shares);
           }
 
-          // Save the updated list of delegators to disk
-          saveDelegators();
-
-          // Check if we should send a delegation message
-          if(parseFloat(delegator.new_vesting_shares) > parseFloat(delegator.vesting_shares) && config.transfer_memos['delegation'] && config.transfer_memos['delegation'] != '')
-            refund(op[1].delegator, 0.001, 'SBD', 'delegation', 0, utils.vestsToSP(parseFloat(delegator.new_vesting_shares)).toFixed());
-
-          utils.log('*** Delegation Update - ' + op[1].delegator + ' has delegated ' + op[1].vesting_shares);
+          // Save the ID of the last transaction that was processed.
+          last_trans = trans[0];
         }
-
-        // Save the ID of the last transaction that was processed.
-        transactions.push(trans[1].trx_id);
-
-        // Don't save more than the last 60 transaction IDs in the state
-        if(transactions.length > 60)
-          transactions.shift();
-      }
     }
 
     if (callback)
@@ -485,15 +457,9 @@ function checkPost(memo, amount, currency, sender, retries) {
     }
 
     // Make sure the author isn't on the blacklist!
-    if(whitelist.indexOf(author) < 0 && (blacklist.indexOf(author) >= 0 || blacklist.indexOf(sender) >= 0))
+    if(config.blacklist && (config.blacklist.indexOf(author) >= 0 || config.blacklist.indexOf(sender) >= 0))
     {
       handleBlacklist(author, sender, amount, currency);
-      return;
-    }
-
-    // If this bot is whitelist-only then make sure the author is on the whitelist
-    if(config.blacklist_settings.whitelist_only && whitelist.indexOf(author) < 0) {
-      refund(sender, amount, currency, 'whitelist_only');
       return;
     }
 
@@ -518,11 +484,11 @@ function checkPost(memo, amount, currency, sender, retries) {
             }
 
             // Check if any tags on this post are blacklisted in the settings
-            if (config.blacklist_settings.blacklisted_tags && config.blacklist_settings.blacklisted_tags.length > 0 && result.json_metadata && result.json_metadata != '') {
+            if (config.blacklisted_tags && config.blacklisted_tags.length > 0 && result.json_metadata && result.json_metadata != '') {
               var tags = JSON.parse(result.json_metadata).tags;
 
               if (tags && tags.length > 0) {
-                var tag = tags.find(t => config.blacklist_settings.blacklisted_tags.indexOf(t) >= 0);
+                var tag = tags.find(t => config.blacklisted_tags.indexOf(t) >= 0);
 
                 if(tag) {
                   refund(sender, amount, currency, 'blacklist_tag', 0, tag);
@@ -544,8 +510,8 @@ function checkPost(memo, amount, currency, sender, retries) {
             }
 
             // Check if this post has been flagged by any flag signal accounts
-            if(config.blacklist_settings.flag_signal_accounts) {
-              var flags = result.active_votes.filter(function(v) { return v.percent < 0 && config.blacklist_settings.flag_signal_accounts.indexOf(v.voter) >= 0; });
+            if(config.flag_signal_accounts) {
+              var flags = result.active_votes.filter(function(v) { return v.percent < 0 && config.flag_signal_accounts.indexOf(v.voter) >= 0; });
 
               if(flags.length > 0) {
                 handleFlag(sender, amount, currency);
@@ -628,7 +594,7 @@ function handleBlacklist(author, sender, amount, currency) {
   utils.log('Invalid Bid - @' + author + ' is on the blacklist!');
 
   // Refund the bid only if blacklist_refunds are enabled in config
-  if (config.blacklist_settings.refund_blacklist)
+  if (config.refund_blacklist)
     refund(sender, amount, currency, 'blacklist_refund', 0);
   else {
     // Otherwise just send a 0.001 transaction with blacklist memo
@@ -636,8 +602,8 @@ function handleBlacklist(author, sender, amount, currency) {
       refund(sender, 0.001, currency, 'blacklist_no_refund', 0);
 
     // If a blacklist donation account is specified then send funds from blacklisted users there
-    if (config.blacklist_settings.blacklist_donation_account)
-      refund(config.blacklist_settings.blacklist_donation_account, amount - 0.001, currency, 'blacklist_donation', 0);
+    if (config.blacklist_donation_account && config.blacklist_donation_account != '')
+      refund(config.blacklist_donation_account, amount - 0.001, currency, 'blacklist_donation', 0);
   }
 }
 
@@ -645,7 +611,7 @@ function handleFlag(sender, amount, currency) {
   utils.log('Invalid Bid - This post has been flagged by one or more spam / abuse indicator accounts.');
 
   // Refund the bid only if blacklist_refunds are enabled in config
-  if (config.blacklist_settings.refund_blacklist)
+  if (config.refund_blacklist)
     refund(sender, amount, currency, 'flag_refund', 0);
   else {
     // Otherwise just send a 0.001 transaction with blacklist memo
@@ -653,8 +619,8 @@ function handleFlag(sender, amount, currency) {
       refund(sender, 0.001, currency, 'flag_no_refund', 0);
 
     // If a blacklist donation account is specified then send funds from blacklisted users there
-    if (config.blacklist_settings.blacklist_donation_account)
-      refund(config.blacklist_settings.blacklist_donation_account, amount - 0.001, currency, 'blacklist_donation', 0);
+    if (config.blacklist_donation_account && config.blacklist_donation_account != '')
+      refund(config.blacklist_donation_account, amount - 0.001, currency, 'blacklist_donation', 0);
   }
 }
 
@@ -685,13 +651,13 @@ function saveState() {
     outstanding_bids: outstanding_bids,
     last_round: last_round,
     next_round: next_round,
-    transactions: transactions,
+    last_trans: last_trans,
     last_withdrawal: last_withdrawal,
     version: version
   };
 
   // Save the state of the bot to disk
-  fs.writeFile('state.json', JSON.stringify(state, null, 2), function (err) {
+  fs.writeFile('state.json', JSON.stringify(state), function (err) {
     if (err)
       utils.log(err);
   });
@@ -746,7 +712,6 @@ function refund(sender, amount, currency, reason, retries, data) {
   memo = memo.replace(/{currency}/g, currency);
   memo = memo.replace(/{min_bid}/g, config.min_bid);
   memo = memo.replace(/{max_bid}/g, config.max_bid);
-  memo = memo.replace(/{max_bid_whitelist}/g, config.max_bid_whitelist);
   memo = memo.replace(/{account}/g, config.account);
   memo = memo.replace(/{owner}/g, config.owner_account);
   memo = memo.replace(/{min_age}/g, config.min_post_age);
@@ -875,6 +840,11 @@ function processWithdrawals() {
 
         // Get the total amount delegated by all delegators
         var total_vests = delegators.reduce(function (total, v) { return total + parseFloat(v.vesting_shares); }, 0);
+
+        var total_SP = utils.vestsToSP(parseFloat(total_vests));
+        var roi = ((parseFloat(account.sbd_balance) * sbd_price / steem_price) + parseFloat(account.balance)) / total_SP * 1000; 
+        utils.log('$$$ Delegators ROI [steem_price,sbd_price,steem_balance,sbd_balance,total_vests,total_SP,ROI]:"'+steem_price+'","'+sbd_price+'","'+parseFloat(account.balance)+'","'+parseFloat(account.sbd_balance)+'","'+total_vests+'","'+total_SP+'","'+roi+'"');
+
 
         // Send the withdrawal to each delegator based on their delegation amount
         for(var j = 0; j < delegators.length; j++) {
@@ -1173,6 +1143,9 @@ function sendWithdrawal(withdrawal, retries, callback) {
 }
 
 function loadPrices() {
+  if (config.currencies_accepted.length <= 1)
+    return;
+
   // Require the "request" library for making HTTP requests
   var request = require("request");
 
@@ -1202,74 +1175,54 @@ function loadPrices() {
 function getUsdValue(bid) { return bid.amount * ((bid.currency == 'SBD') ? sbd_price : steem_price); }
 
 function logFailedBid(bid, message) {
-  try {
-    message = JSON.stringify(message);
+  if (message.indexOf('assert_exception') >= 0 && message.indexOf('ERR_ASSERTION') >= 0)
+    return;
 
-    if (message.indexOf('assert_exception') >= 0 && message.indexOf('ERR_ASSERTION') >= 0)
-      return;
+  var failed_bids = [];
 
-    var failed_bids = [];
+  if(fs.existsSync("failed-bids.json"))
+    failed_bids = JSON.parse(fs.readFileSync("failed-bids.json"));
 
-    if(fs.existsSync("failed-bids.json"))
-      failed_bids = JSON.parse(fs.readFileSync("failed-bids.json"));
+  bid.error = message;
+  failed_bids.push(bid);
 
-    bid.error = message;
-    failed_bids.push(bid);
-
-    fs.writeFile('failed-bids.json', JSON.stringify(failed_bids), function (err) {
-      if (err)
-        utils.log('Error saving failed bids to disk: ' + err);
-    });
-  } catch (err) {
-    utils.log(err);
-  }
+  fs.writeFile('failed-bids.json', JSON.stringify(failed_bids), function (err) {
+    if (err)
+      utils.log('Error saving failed bids to disk: ' + err);
+  });
 }
 
 function loadConfig() {
+  // Save the existing blacklist so it doesn't get overwritten
+  var blacklist = [];
+  if (config && config.blacklist)
+    blacklist = config.blacklist;
+
   config = JSON.parse(fs.readFileSync("config.json"));
 
-  // Backwards compatibility for blacklist settings
-  if(!config.blacklist_settings) {
-    config.blacklist_settings = {
-      flag_signal_accounts: config.flag_signal_accounts,
-      blacklist_location: config.blacklist_location ? config.blacklist_location : 'blacklist',
-      refund_blacklist: config.refund_blacklist,
-      blacklist_donation_account: config.blacklist_donation_account,
-      blacklisted_tags: config.blacklisted_tags
-    };
-  }
+  // Restore the existing blacklist in case there's an issue loading it again
+  config.blacklist = blacklist;
 
-  var newBlacklist = [];
+  var location = (config.blacklist_location && config.blacklist_location != '') ? config.blacklist_location : 'blacklist';
 
-  // Load the blacklist
-  utils.loadUserList(config.blacklist_settings.blacklist_location, function(list1) {
-    var list = [];
+  if (location.startsWith('http://') || location.startsWith('https://')) {
+    // Require the "request" library for making HTTP requests
+    var request = require("request");
 
-    if(list1)
-      list = list1;
-
-    // Load the shared blacklist
-    utils.loadUserList(config.blacklist_settings.shared_blacklist_location, function(list2) {
-      if(list2)
-        list = list.concat(list2.filter(i => list.indexOf(i) < 0));
-
-      if(list1 || list2)
-        blacklist = list;
+    request.get(location, function (e, r, data) {
+      try {
+        config.blacklist = data.replace(/[\r]/g, '').split('\n');
+      } catch (err) {
+        utils.log('Error loading blacklist from: ' + location + ', Error: ' + err);
+      }
     });
-  });
-
-  // Load the whitelist
-  utils.loadUserList(config.blacklist_settings.whitelist_location, function(list) {
-    if(list)
-      whitelist = list;
-  });
+  } else if (fs.existsSync(location)) {
+    config.blacklist = fs.readFileSync(location, "utf8").replace(/[\r]/g, '').split('\n');
+  }
 }
 
 function failover() {
   if(config.rpc_nodes && config.rpc_nodes.length > 1) {
-    // Give it a minute after the failover to account for more errors coming in from the original node
-    setTimeout(function() { error_count = 0; }, 60 * 1000);
-
     var cur_node_index = config.rpc_nodes.indexOf(steem.api.options.url) + 1;
 
     if(cur_node_index == config.rpc_nodes.length)
@@ -1292,11 +1245,11 @@ function logError(message) {
   if (message.indexOf('assert_exception') < 0 && message.indexOf('ERR_ASSERTION') < 0)
     error_count++;
 
-  utils.log('Error Count: ' + error_count + ', Current node: ' + steem.api.options.url);
+  utils.log('Error Count: ' + error_count);
   utils.log(message);
 }
 
-// Check if 10+ errors have happened in a 3-minute period and fail over to next rpc node
+// Check if too many errors have happened in a 1-minute period and fail over to next rpc node
 function checkErrors() {
   if(error_count >= 10)
     failover();
@@ -1304,4 +1257,4 @@ function checkErrors() {
   // Reset the error counter
   error_count = 0;
 }
-setInterval(checkErrors, 3 * 60 * 1000);
+setInterval(checkErrors, 60 * 1000);
