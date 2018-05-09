@@ -17,7 +17,8 @@
   "auto_claim_rewards" : true,
   "post_rewards_withdrawal_account": "withdraw_liquid_post_rewards_to_account",
   "min_bid": 0.1,
-  "max_bid": 999,
+  "max_bid": 50,
+  "max_bid_whitelist": 999,
   "batch_vote_weight": 100,
   "min_post_age": 20,
   "max_post_age": 84,
@@ -26,13 +27,18 @@
   "refunds_enabled": true,
   "min_refund_amount": 0.002,
   "no_refund": ["bittrex", "poloniex", "openledger", "blocktrades", "minnowbooster", "ginabot"],
-  "flag_signal_accounts": ["spaminator", "cheetah", "steemcleaners", "mack-bot", "blacklist-a"],
   "comment_location": "comment.md",
-  "blacklist_location": "blacklist",
-  "refund_blacklist": false,
-  "blacklist_donation_account": "steemcleaners",
-  "blacklisted_tags": ["nsfw"],
   "max_per_author_per_round": 1,
+  "blacklist_settings": {
+    "flag_signal_accounts": ["spaminator", "cheetah", "steemcleaners", "mack-bot"],
+    "blacklist_location": "blacklist",
+    "shared_blacklist_location": "",
+    "whitelist_location": "",
+    "whitelist_only": false,
+    "refund_blacklist": false,
+    "blacklist_donation_account": "steemcleaners",
+    "blacklisted_tags": ["nsfw"]
+  },
   "auto_withdrawal": {
     "active": true,
     "accounts": [
@@ -60,6 +66,7 @@
     "bot_disabled": "Refund for invalid bid: {amount} - The bot is currently disabled.",
     "below_min_bid": "Refund for invalid bid: {amount} - Min bid amount is {min_bid}.",
     "above_max_bid": "Refund for invalid bid: {amount} - Max bid amount is {max_bid}.",
+    "above_max_bid_whitelist": "Refund for invalid bid: {amount} - Max bid amount for whitelisted users is {max_bid_whitelist}.",
     "invalid_currency": "Refund for invalid bid: {amount} - Bids in {currency} are not accepted.",
     "no_comments": "Refund for invalid bid: {amount} - Bids not allowed on comments.",
     "already_voted": "Refund for invalid bid: {amount} - Bot already voted on this post.",
@@ -74,6 +81,7 @@
     "blacklist_tag": "Bid is invalid - This post contains the [{tag}] tag which is not allowed by this bot.",
     "bids_per_round": "Bid is invalid - This author already has the maximum number of allowed bids in this round.",
     "round_full": "The current bidding round is full. Your bid has been submitted into the following round.",
-    "forward_payment": "Payment forwarded from @{tag}."
+    "forward_payment": "Payment forwarded from @{tag}.",
+    "whitelist_only": "Bid is invalid - Only posts by whitelisted authors are accepted by this bot."
   }
 }

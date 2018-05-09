@@ -1,6 +1,6 @@
 {
   "name": "postpromoter",
-  "version": "1.9.2",
+  "version": "2.0.0",
   "description": "Steem bid-based voting bot written in JavaScript",
   "main": "index.js",
   "scripts": {

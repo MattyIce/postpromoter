@@ -1,3 +1,4 @@
+var fs = require("fs");
 const steem = require('steem');
 
 var STEEMIT_100_PERCENT = 10000;
@@ -12,7 +13,7 @@ var HOURS = 60 * 60;
  var totalVestingFund;
  var totalVestingShares;
  var steem_per_mvests;
- 
+
  function updateSteemVariables() {
      steem.api.getRewardFund("post", function (e, t) {
        if(t && !e) {
@@ -44,7 +45,7 @@ var HOURS = 60 * 60;
 
      setTimeout(updateSteemVariables, 180 * 1000)
  }
- 
+
  function vestsToSP(vests) { return vests / 1000000 * steem_per_mvests; }
 
  function getVotingPower(account) {
@@ -112,6 +113,36 @@ function timeTilFullPower(cur_power){
    return amount.substr(amount.indexOf(' ') + 1);
  }
 
+function loadUserList(location, callback) {
+  if(!location) {
+    if(callback)
+      callback(null);
+
+    return;
+  }
+
+  if (location.startsWith('http://') || location.startsWith('https://')) {
+    // Require the "request" library for making HTTP requests
+    var request = require("request");
+
+    request.get(location, function (e, r, data) {
+      try {
+        if(callback)
+          callback(data.replace(/[\r]/g, '').split('\n'));
+      } catch (err) {
+        utils.log('Error loading blacklist from: ' + location + ', Error: ' + err);
+
+        if(callback)
+          callback(null);
+      }
+    });
+  } else if (fs.existsSync(location)) {
+    if(callback)
+      callback(fs.readFileSync(location, "utf8").replace(/[\r]/g, '').split('\n'));
+  } else if(callback)
+    callback([]);
+}
+
 function format(n, c, d, t) {
   var c = isNaN(c = Math.abs(c)) ? 2 : c,
       d = d == undefined ? "." : d,
@@ -146,6 +177,7 @@ function format(n, c, d, t) {
    timeTilFullPower: timeTilFullPower,
    getVestingShares: getVestingShares,
 	 vestsToSP: vestsToSP,
+   loadUserList: loadUserList,
    getCurrency: getCurrency,
    format: format,
    toTimer: toTimer,
