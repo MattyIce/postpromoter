@@ -491,8 +491,8 @@ function checkPost(memo, amount, currency, sender, retries) {
       return;
     }
 
-    // If this bot is whitelist-only then make sure the author is on the whitelist
-    if(config.blacklist_settings.whitelist_only && whitelist.indexOf(author) < 0) {
+    // If this bot is whitelist-only then make sure the sender is on the whitelist
+    if(config.blacklist_settings.whitelist_only && whitelist.indexOf(sender) < 0) {
       refund(sender, amount, currency, 'whitelist_only');
       return;
     }
