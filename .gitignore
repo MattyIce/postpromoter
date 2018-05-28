@@ -64,3 +64,5 @@ typings/
 # other
 .sublime-project
 delegators.json
+comment.md
+package-lock.json
