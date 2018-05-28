@@ -66,3 +66,4 @@ typings/
 delegators.json
 comment.md
 package-lock.json
+whitelist.txt
