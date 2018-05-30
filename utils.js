@@ -130,7 +130,7 @@ function loadUserList(location, callback) {
         if(callback)
           callback(data.replace(/[\r]/g, '').split('\n'));
       } catch (err) {
-        utils.log('Error loading blacklist from: ' + location + ', Error: ' + err);
+        log('Error loading blacklist from: ' + location + ', Error: ' + err);
 
         if(callback)
           callback(null);
