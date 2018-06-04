@@ -1070,7 +1070,7 @@ function loadPrices() {
         utils.log('Error loading SBD price: ' + err);
       }
     });
-  } else if (config.price_source.startsWith('http')) {
+  } else if (config.price_source && config.price_source.startsWith('http')) {
     request.get(config.price_source, function (e, r, data) {
       try {
         sbd_price = parseFloat(JSON.parse(data).sbd_price);
