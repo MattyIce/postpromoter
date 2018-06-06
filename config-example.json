@@ -82,6 +82,7 @@
     "blacklist_tag": "Bid is invalid - This post contains the [{tag}] tag which is not allowed by this bot.",
     "bids_per_round": "Bid is invalid - This author already has the maximum number of allowed bids in this round.",
     "round_full": "The current bidding round is full. Your bid has been submitted into the following round.",
+    "next_round_full": "Cannot deliver min return for this size bid in the current or next round. Please try a smaller bid amount.",
     "forward_payment": "Payment forwarded from @{tag}.",
     "whitelist_only": "Bid is invalid - Only posts by whitelisted authors are accepted by this bot."
   }

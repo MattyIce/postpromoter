@@ -102,6 +102,7 @@ Then set the following options in config.json:
     "blacklist_tag": "Bid is invalid - This post contains the [{tag}] tag which is not allowed by this bot.",
     "bids_per_round": "Bid is invalid - This author already has the maximum number of allowed bids in this round.",
     "round_full": "The current bidding round is full. Your bid has been submitted into the following round.",
+    "next_round_full": "Cannot deliver min return for this size bid in the current or next round. Please try a smaller bid amount.",
     "forward_payment": "Payment forwarded from @{tag}."
 		"bid_confirmation": "Your bid is confirmed. You will receive your vote when the bot reaches 100% voting power. Thank you!",
 		"delegation": "Thank you for your delegation of {tag} SP! You will start to receive payouts after the next withdrawal.",

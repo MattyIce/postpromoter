@@ -451,13 +451,13 @@ function getTransactions(callback) {
   });
 }
 
-function checkRoundFillLimit(amount, currency) {
+function checkRoundFillLimit(round, amount, currency) {
   if(config.round_fill_limit == null || config.round_fill_limit == undefined || isNaN(config.round_fill_limit))
     return false;
 
   var vote_value = utils.getVoteValue(100, account, 10000);
   var vote_value_usd = vote_value / 2 * sbd_price + vote_value / 2;
-  var bid_value = outstanding_bids.reduce(function(t, b) { return t + b.amount * ((b.currency == 'SBD') ? sbd_price : steem_price) }, 0);
+  var bid_value = round.reduce(function(t, b) { return t + b.amount * ((b.currency == 'SBD') ? sbd_price : steem_price) }, 0);
   var new_bid_value = amount * ((currency == 'SBD') ? sbd_price : steem_price);
 
   // Check if the value of the bids is over the round fill limit
@@ -576,9 +576,14 @@ function checkPost(memo, amount, currency, sender, retries) {
           }
         }
 
-        if(!push_to_next_round && checkRoundFillLimit(amount, currency)) {
-          push_to_next_round = true;
-          refund(sender, 0.001, currency, 'round_full');
+        if(!push_to_next_round && checkRoundFillLimit(outstanding_bids, amount, currency)) {
+          if(checkRoundFillLimit(next_round, amount, currency)) {
+            refund(sender, amount, currency, 'next_round_full');
+            return;
+          } else {
+            push_to_next_round = true;
+            refund(sender, 0.001, currency, 'round_full');
+          }
         }
 
         // Add the bid to the current round or the next round if the current one is full or the post is too new
