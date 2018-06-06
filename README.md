@@ -49,6 +49,7 @@ Then set the following options in config.json:
   "no_refund": ["bittrex", "poloniex", "openledger", "blocktrades", "minnowbooster"], // Don't refund transactions from these accounts!
   "max_per_author_per_round": 1, // Limit to the number of posts that can be voted on for a particular author each round
   "comment_location": "comment.md", // The location of a markdown file containing the comment that should be left after the bot votes on a post. Leave this null or blank for no comment.
+  "price_source": "bittrex",  // Where to load STEEM/SBD prices. Default is 'bittrex'. Also can use 'coinmarketcap' or a custom prices API URL
   "blacklist_settings": {
     "flag_signal_accounts": ["spaminator", "cheetah", "steemcleaners", "mack-bot"], // If any accounts on this list has flagged the post at the time the bid comes in it will be treated as blacklisted
     "blacklist_location": "blacklist", // The location of the blacklist file containing one blacklisted Steem account name per line
