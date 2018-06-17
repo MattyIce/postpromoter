@@ -2,7 +2,7 @@
 
  This is a fork from @MattyIce/postpromoter. I add a feature called `Tag Promotion` which will enable voting weight bonus on specific tags. I believe this feature can add more diversity to the Voting bots and actually helps the Steem Community.
 
-The script is currently running on a bot called [@bidseption on Steemit](https://steemit.com/@bidseption). If you like the feature and you're running a bot with this script, you can let me know and I'll list your bot's name here :)
+The script is currently running on a bot called [@bidseption](https://steemit.com/@bidseption) on Steemit. If you like the feature and you're running a bot with this script, you can let me know and I'll list your bot's name here :)
 
 
 ## Installation
@@ -19,7 +19,7 @@ $ mv config-example.json config.json
 
 Then set the following options in `config.json`:
 
-Most of the settings are the same with @MattyIce's repo, so you can find setting details in his README file [here](https://github.com/MattyIce/postpromoter). To enable the `Tag Promotion` feature and do some customer settings, you just have to edit the following options
+Most of the settings are the same with @MattyIce's repo, so you can find setting details in his README file [here](https://github.com/MattyIce/postpromoter). To enable the `Tag Promotion` feature and do some customized settings, you just have to edit the following options
 
 ```
 "allow_tag_promotion": true, # enable the feature
