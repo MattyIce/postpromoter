@@ -49,6 +49,7 @@ Then set the following options in config.json:
   "no_refund": ["bittrex", "poloniex", "openledger", "blocktrades", "minnowbooster"], // Don't refund transactions from these accounts!
   "max_per_author_per_round": 1, // Limit to the number of posts that can be voted on for a particular author each round
   "comment_location": "comment.md", // The location of a markdown file containing the comment that should be left after the bot votes on a post. Leave this null or blank for no comment.
+  "price_source": "bittrex",  // Where to load STEEM/SBD prices. Default is 'bittrex'. Also can use 'coinmarketcap' or a custom prices API URL
   "blacklist_settings": {
     "flag_signal_accounts": ["spaminator", "cheetah", "steemcleaners", "mack-bot"], // If any accounts on this list has flagged the post at the time the bid comes in it will be treated as blacklisted
     "blacklist_location": "blacklist", // The location of the blacklist file containing one blacklisted Steem account name per line
@@ -101,6 +102,7 @@ Then set the following options in config.json:
     "blacklist_tag": "Bid is invalid - This post contains the [{tag}] tag which is not allowed by this bot.",
     "bids_per_round": "Bid is invalid - This author already has the maximum number of allowed bids in this round.",
     "round_full": "The current bidding round is full. Your bid has been submitted into the following round.",
+    "next_round_full": "Cannot deliver min return for this size bid in the current or next round. Please try a smaller bid amount.",
     "forward_payment": "Payment forwarded from @{tag}."
 		"bid_confirmation": "Your bid is confirmed. You will receive your vote when the bot reaches 100% voting power. Thank you!",
 		"delegation": "Thank you for your delegation of {tag} SP! You will start to receive payouts after the next withdrawal.",
