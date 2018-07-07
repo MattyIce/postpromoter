@@ -28,7 +28,7 @@ function startup() {
 
   // Connect to the specified RPC node
   var rpc_node = config.rpc_nodes ? config.rpc_nodes[0] : (config.rpc_node ? config.rpc_node : 'https://api.steemit.com');
-  steem.api.setOptions({ transport: 'http', uri: rpc_node, url: rpc_node });
+  steem.api.setOptions({ url: rpc_node });
 
   utils.log("* START - Version: " + version + " *");
   utils.log("Connected to: " + rpc_node);
@@ -746,7 +746,11 @@ function refund(sender, amount, currency, reason, retries, data) {
   }
 
   // Replace variables in the memo text
-  var memo = config.transfer_memos[reason];
+	var memo = config.transfer_memos[reason];
+	
+	if(!memo)
+		memo = 'Refund for invalid bid - ' + reason;
+
   memo = memo.replace(/{amount}/g, utils.format(amount, 3) + ' ' + currency);
   memo = memo.replace(/{currency}/g, currency);
   memo = memo.replace(/{min_bid}/g, config.min_bid);
