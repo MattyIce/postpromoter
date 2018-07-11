@@ -566,14 +566,15 @@ function checkPost(memo, amount, currency, sender, retries) {
           logError('Error loading post: ' + memo + ', Error: ' + err);
 
           // Try again on error
-          if(retries < 2)
-            setTimeout(function() { checkPost(memo, amount, currency, sender, retries + 1); }, 3000);
-          else {
+          if(retries < 2) {
+						setTimeout(function() { checkPost(memo, amount, currency, sender, retries + 1); }, 3000);
+					} else {
             utils.log('============= Load post failed three times for: ' + memo + ' ===============');
 
             refund(sender, amount, currency, 'invalid_post_url');
-            return;
-          }
+					}
+					
+					return;
         }
 
         if(!push_to_next_round && checkRoundFillLimit(outstanding_bids, amount, currency)) {
