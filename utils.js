@@ -1,5 +1,5 @@
 var fs = require("fs");
-const steem = require('steem');
+var dsteem = require('dsteem');
 
 var STEEMIT_100_PERCENT = 10000;
 var STEEMIT_VOTE_REGENERATION_SECONDS = (5 * 60 * 60 * 24);
@@ -14,36 +14,30 @@ var HOURS = 60 * 60;
  var totalVestingShares;
  var steem_per_mvests;
 
- function updateSteemVariables() {
-     steem.api.getRewardFund("post", function (e, t) {
-       if(t && !e) {
-         rewardBalance = parseFloat(t.reward_balance.replace(" STEEM", ""));
-         recentClaims = t.recent_claims;
-       } else {
-         log('Error loading reward fund: ' + e);
-       }
-     });
+ function updateSteemVariables(client) {
+    client.database.call('get_reward_fund', ['post']).then(function (t) {
+      rewardBalance = parseFloat(t.reward_balance.replace(" STEEM", ""));
+      recentClaims = t.recent_claims;
+    }, function(e) {
+      log('Error loading reward fund: ' + e);
+    });
 
-     steem.api.getCurrentMedianHistoryPrice(function (e, t) {
-       if(t && !e) {
-         steemPrice = parseFloat(t.base.replace(" SBD", "")) / parseFloat(t.quote.replace(" STEEM", ""));
-       } else {
-         log('Error loading steem price: ' + e);
-       }
-     });
+    client.database.getCurrentMedianHistoryPrice().then(function (t) {
+      steemPrice = parseFloat(t.base) / parseFloat(t.quote);
+    }, function(e) {
+      log('Error loading steem price: ' + e);
+    });
 
-     steem.api.getDynamicGlobalProperties(function (e, t) {
-       if(t && !e) {
-         votePowerReserveRate = t.vote_power_reserve_rate;
-         totalVestingFund = parseFloat(t.total_vesting_fund_steem.replace(" STEEM", ""));
-         totalVestingShares = parseFloat(t.total_vesting_shares.replace(" VESTS", ""));
-				 steem_per_mvests = ((totalVestingFund / totalVestingShares) * 1000000);
-       } else {
-         log('Error loading global properties: ' + e);
-       }
-     });
+    client.database.getDynamicGlobalProperties().then(function (t) {
+      votePowerReserveRate = t.vote_power_reserve_rate;
+      totalVestingFund = parseFloat(t.total_vesting_fund_steem.replace(" STEEM", ""));
+      totalVestingShares = parseFloat(t.total_vesting_shares.replace(" VESTS", ""));
+      steem_per_mvests = ((totalVestingFund / totalVestingShares) * 1000000);
+    }, function (e) {
+      log('Error loading global properties: ' + e);
+    });
 
-     setTimeout(updateSteemVariables, 180 * 1000)
+    setTimeout(updateSteemVariables, 180 * 1000)
  }
 
  function vestsToSP(vests) { return vests / 1000000 * steem_per_mvests; }

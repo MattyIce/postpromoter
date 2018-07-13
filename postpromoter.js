@@ -1,5 +1,6 @@
 var fs = require("fs");
 const steem = require('steem');
+var dsteem = require('dsteem');
 var utils = require('./utils');
 
 var account = null;
@@ -18,7 +19,8 @@ var use_delegators = false;
 var round_end_timeout = -1;
 var steem_price = 1;  // This will get overridden with actual prices if a price_feed_url is specified in settings
 var sbd_price = 1;    // This will get overridden with actual prices if a price_feed_url is specified in settings
-var version = '2.0.2';
+var version = '2.1.0';
+var client = null;
 
 startup();
 
@@ -28,7 +30,8 @@ function startup() {
 
   // Connect to the specified RPC node
   var rpc_node = config.rpc_nodes ? config.rpc_nodes[0] : (config.rpc_node ? config.rpc_node : 'https://api.steemit.com');
-  steem.api.setOptions({ url: rpc_node });
+  steem.api.setOptions({ transport: 'http', uri: rpc_node, url: rpc_node });
+  client = new dsteem.Client(rpc_node)
 
   utils.log("* START - Version: " + version + " *");
   utils.log("Connected to: " + rpc_node);
@@ -120,61 +123,60 @@ function startProcess() {
   loadConfig();
 
   // Load the bot account info
-  steem.api.getAccounts([config.account], function (err, result) {
-    if (result && !err) {
-      account = result[0];
+  client.database.getAccounts([config.account]).then(function (result) {
+    account = result[0];
 
-			if (account && !isVoting) {
-				// Load the current voting power of the account
-				var vp = utils.getVotingPower(account);
+    if (account && !isVoting) {
+      // Load the current voting power of the account
+      var vp = utils.getVotingPower(account);
 
-				if(config.detailed_logging) {
-					var bids_steem = utils.format(outstanding_bids.reduce(function(t, b) { return t + ((b.currency == 'STEEM') ? b.amount : 0); }, 0), 3);
-					var bids_sbd = utils.format(outstanding_bids.reduce(function(t, b) { return t + ((b.currency == 'SBD') ? b.amount : 0); }, 0), 3);
-					utils.log((config.backup_mode ? '* BACKUP MODE *' : '') + 'Voting Power: ' + utils.format(vp / 100) + '% | Time until next round: ' + utils.toTimer(utils.timeTilFullPower(vp)) + ' | Bids: ' + outstanding_bids.length + ' | ' + bids_sbd + ' SBD | ' + bids_steem + ' STEEM');
-				}
+      if(config.detailed_logging) {
+        var bids_steem = utils.format(outstanding_bids.reduce(function(t, b) { return t + ((b.currency == 'STEEM') ? b.amount : 0); }, 0), 3);
+        var bids_sbd = utils.format(outstanding_bids.reduce(function(t, b) { return t + ((b.currency == 'SBD') ? b.amount : 0); }, 0), 3);
+        utils.log((config.backup_mode ? '* BACKUP MODE *' : '') + 'Voting Power: ' + utils.format(vp / 100) + '% | Time until next round: ' + utils.toTimer(utils.timeTilFullPower(vp)) + ' | Bids: ' + outstanding_bids.length + ' | ' + bids_sbd + ' SBD | ' + bids_steem + ' STEEM');
+      }
 
-				// We are at 100% voting power - time to vote!
-				if (vp >= 10000 && outstanding_bids.length > 0 && round_end_timeout < 0) {
-					round_end_timeout = setTimeout(function() {
-						round_end_timeout = -1;
+      // We are at 100% voting power - time to vote!
+      if (vp >= 10000 && outstanding_bids.length > 0 && round_end_timeout < 0) {
+        round_end_timeout = setTimeout(function() {
+          round_end_timeout = -1;
 
-						// Don't process any bids while we are voting due to race condition (they will be processed when voting is done).
-						isVoting = first_load = true;
+          // Don't process any bids while we are voting due to race condition (they will be processed when voting is done).
+          isVoting = first_load = true;
 
-						// Make a copy of the list of outstanding bids and vote on them
-						startVoting(outstanding_bids.slice().reverse());
+          // Make a copy of the list of outstanding bids and vote on them
+          startVoting(outstanding_bids.slice().reverse());
 
-						// Save the last round of bids for use in API call
-						last_round = outstanding_bids.slice();
+          // Save the last round of bids for use in API call
+          last_round = outstanding_bids.slice();
 
-						// Some bids might have been pushed to the next round, so now move them to the current round
-						outstanding_bids = next_round.slice();
+          // Some bids might have been pushed to the next round, so now move them to the current round
+          outstanding_bids = next_round.slice();
 
-						// Reset the next round
-						next_round = [];
+          // Reset the next round
+          next_round = [];
 
-						// Send out earnings if frequency is set to every round
-						if (config.auto_withdrawal.frequency == 'round_end')
-							processWithdrawals();
+          // Send out earnings if frequency is set to every round
+          if (config.auto_withdrawal.frequency == 'round_end')
+            processWithdrawals();
 
-						// Save the state of the bot to disk
-						saveState();
-					}, 30 * 1000);
-				}
+          // Save the state of the bot to disk
+          saveState();
+        }, 30 * 1000);
+      }
 
-				// Load transactions to the bot account
-        getTransactions(saveState);
-        
-				// Check if there are any rewards to claim.
-				claimRewards();
+      // Load transactions to the bot account
+      getTransactions(saveState);
+      
+      // Check if there are any rewards to claim.
+      claimRewards();
 
-				// Check if it is time to withdraw funds.
-				if (config.auto_withdrawal.frequency == 'daily')
-					checkAutoWithdraw();
-			}
-    } else
-      logError('Error loading bot account: ' + err);
+      // Check if it is time to withdraw funds.
+      if (config.auto_withdrawal.frequency == 'daily')
+        checkAutoWithdraw();
+    }
+  }, function(err) {
+    logError('Error loading bot account: ' + err);
   });
 }
 
@@ -245,28 +247,38 @@ function comment(bids) {
 }
 
 function sendVote(bid, retries, callback) {
-  utils.log('Bid Weight: ' + bid.weight);
-  steem.broadcast.vote(config.posting_key, account.name, bid.author, bid.permlink, bid.weight, function (err, result) {
-    if (!err && result) {
-      utils.log(utils.format(bid.weight / 100) + '% vote cast for: @' + bid.author + '/' + bid.permlink);
+  utils.log('Casting: ' + utils.format(bid.weight / 100) + '% vote cast for: @' + bid.author + '/' + bid.permlink);
+  
+  validatePost(bid.author, bid.permlink, function(e) {
+    if(e) {
+      utils.log('Post @' + bid.author + '/' + bid.permlink + ' is invalid for reason: ' + e);
 
-      if (callback)
+      if(callback)
         callback();
     } else {
-      logError('Error sending vote for: @' + bid.author + '/' + bid.permlink + ', Error: ' + err);
+      steem.broadcast.vote(config.posting_key, account.name, bid.author, bid.permlink, bid.weight, function (err, result) {
+        if (!err && result) {
+          utils.log(utils.format(bid.weight / 100) + '% vote cast for: @' + bid.author + '/' + bid.permlink);
 
-      // Try again on error
-      if(retries < 2)
-        setTimeout(function() { sendVote(bid, retries + 1, callback); }, 10000);
-      else {
-        utils.log('============= Vote transaction failed three times for: @' + bid.author + '/' + bid.permlink + ' Bid Amount: ' + bid.amount + ' ' + bid.currency + ' ===============');
-        logFailedBid(bid, err);
+          if (callback)
+            callback();
+        } else {
+          logError('Error sending vote for: @' + bid.author + '/' + bid.permlink + ', Error: ' + err);
 
-        if (callback)
-          callback();
-      }
+          // Try again on error
+          if(retries < 2)
+            setTimeout(function() { sendVote(bid, retries + 1, callback); }, 10000);
+          else {
+            utils.log('============= Vote transaction failed three times for: @' + bid.author + '/' + bid.permlink + ' Bid Amount: ' + bid.amount + ' ' + bid.currency + ' ===============');
+            logFailedBid(bid, err);
+
+            if (callback)
+              callback();
+          }
+        }
+      });
     }
-  });
+  }
 }
 
 function sendComment(bid) {
@@ -334,16 +346,7 @@ function getTransactions(callback) {
     num_trans = 1000;
   }
 
-  steem.api.getAccountHistory(account.name, -1, num_trans, function (err, result) {
-    if (err || !result) {
-      logError('Error loading account history: ' + err);
-
-      if (callback)
-        callback();
-
-      return;
-    }
-
+  client.database.call('get_account_history', [account.name, -1, num_trans]).then(function (result) {
     // On first load, just record the list of the past 50 transactions so we don't double-process them.
     if (first_load && transactions.length == 0) {
       transactions = result.map(r => r[1].trx_id).filter(t => t != '0000000000000000000000000000000000000000');
@@ -448,6 +451,11 @@ function getTransactions(callback) {
 
     if (callback)
       callback();
+  }, function(err) {
+    logError('Error loading account history: ' + err);
+
+    if (callback)
+      callback();
   });
 }
 
@@ -464,169 +472,196 @@ function checkRoundFillLimit(round, amount, currency) {
   return (vote_value_usd * 0.75 * config.round_fill_limit < bid_value + new_bid_value);
 }
 
-function checkPost(memo, amount, currency, sender, retries) {
-    // Parse the author and permlink from the memo URL
-    var permLink = memo.substr(memo.lastIndexOf('/') + 1);
-    var site = memo.substring(memo.indexOf('://')+3,memo.indexOf('/', memo.indexOf('://')+3));
-    switch(site) {
-      case 'd.tube':
-          var author = memo.substring(memo.indexOf("/v/")+3,memo.lastIndexOf('/'));
-          break;
-      case 'dmania.lol':
-          var author = memo.substring(memo.indexOf("/post/")+6,memo.lastIndexOf('/'));
-          break;
-      default:
-          var author = memo.substring(memo.lastIndexOf('@') + 1, memo.lastIndexOf('/'));
-    }
+function validatePost(author, permlink, callback, retries) {
+  client.database.call('get_content', [author, permlink]).then(function (result) {
+    if (result && result.id > 0) {
 
-    if (author == '' || permLink == '') {
-      refund(sender, amount, currency, 'invalid_post_url');
+        // If comments are not allowed then we need to first check if the post is a comment
+        if(!config.allow_comments && (result.parent_author != null && result.parent_author != '')) {
+          if(callback)
+            callback('no_comments');
+
+          return;
+        }
+
+        // Check if any tags on this post are blacklisted in the settings
+        if (config.blacklist_settings.blacklisted_tags && config.blacklist_settings.blacklisted_tags.length > 0 && result.json_metadata && result.json_metadata != '') {
+          var tags = JSON.parse(result.json_metadata).tags;
+
+          if (tags && tags.length > 0) {
+            var tag = tags.find(t => config.blacklist_settings.blacklisted_tags.indexOf(t) >= 0);
+
+            if(tag) {
+              if(callback)
+                callback('blacklist_tag');
+
+              return;
+            }
+          }
+        }
+
+        var created = new Date(result.created + 'Z');
+        var time_until_vote = utils.timeTilFullPower(utils.getVotingPower(account));
+
+        // Get the list of votes on this post to make sure the bot didn't already vote on it (you'd be surprised how often people double-submit!)
+        var votes = result.active_votes.filter(function(vote) { return vote.voter == account.name; });
+
+        if (votes.length > 0 || (new Date() - created) >= (config.max_post_age * 60 * 60 * 1000)) {
+            // This post is already voted on by this bot or the post is too old to be voted on
+            if(callback)
+              callback(((votes.length > 0) ? 'already_voted' : 'max_age'));
+            
+            return;
+        }
+
+        // Check if this post has been flagged by any flag signal accounts
+        if(config.blacklist_settings.flag_signal_accounts) {
+          var flags = result.active_votes.filter(function(v) { return v.percent < 0 && config.blacklist_settings.flag_signal_accounts.indexOf(v.voter) >= 0; });
+
+          if(flags.length > 0) {
+            if(callback)
+              callback('flag_signal_account');
+            
+            return;
+          }
+        }
+
+        // Check if this post is below the minimum post age
+        if(config.min_post_age && config.min_post_age > 0 && (new Date() - created + (time_until_vote * 1000)) < (config.min_post_age * 60 * 1000)) {
+          if(callback)
+            callback('min_age');
+          
+            return;
+        }
+
+        // Post is good!
+        if(callback)
+          callback();
+    } else if(result && result.id == 0) {
+      // Invalid memo
+      if(callback)
+        callback('invalid_post_url');
+
       return;
     }
+  }, function(err) {
+      logError('Error loading post: ' + memo + ', Error: ' + err);
 
-    // Make sure the author isn't on the blacklist!
-    if(whitelist.indexOf(author) < 0 && (blacklist.indexOf(author) >= 0 || blacklist.indexOf(sender) >= 0))
-    {
-      handleBlacklist(author, sender, amount, currency);
-      return;
-    }
+      // Try again on error
+      if(retries < 2)
+        setTimeout(function() { validatePost(author, permlink, callback, retries + 1); }, 3000);
+      else {
+        utils.log('============= Validate post failed three times for: ' + memo + ' ===============');
+        
+        if(callback)
+          callback('invalid_post_url');
 
-    // If this bot is whitelist-only then make sure the sender is on the whitelist
-    if(config.blacklist_settings.whitelist_only && whitelist.indexOf(sender) < 0) {
-      refund(sender, amount, currency, 'whitelist_only');
-      return;
-    }
-
-    // Check if this author has gone over the max bids per author per round
-    if(config.max_per_author_per_round && config.max_per_author_per_round > 0) {
-      if(outstanding_bids.filter(b => b.author == author).length >= config.max_per_author_per_round)
-      {
-        refund(sender, amount, currency, 'bids_per_round');
         return;
+      }
+    });
+}
+
+function checkPost(memo, amount, currency, sender, retries) {
+  // Parse the author and permlink from the memo URL
+  var permLink = memo.substr(memo.lastIndexOf('/') + 1);
+  var site = memo.substring(memo.indexOf('://')+3,memo.indexOf('/', memo.indexOf('://')+3));
+  switch(site) {
+    case 'd.tube':
+        var author = memo.substring(memo.indexOf("/v/")+3,memo.lastIndexOf('/'));
+        break;
+    case 'dmania.lol':
+        var author = memo.substring(memo.indexOf("/post/")+6,memo.lastIndexOf('/'));
+        break;
+    default:
+        var author = memo.substring(memo.lastIndexOf('@') + 1, memo.lastIndexOf('/'));
+  }
+
+  if (author == '' || permLink == '') {
+    refund(sender, amount, currency, 'invalid_post_url');
+    return;
+  }
+
+  // Make sure the author isn't on the blacklist!
+  if(whitelist.indexOf(author) < 0 && (blacklist.indexOf(author) >= 0 || blacklist.indexOf(sender) >= 0))
+  {
+    handleBlacklist(author, sender, amount, currency);
+    return;
+  }
+
+  // If this bot is whitelist-only then make sure the sender is on the whitelist
+  if(config.blacklist_settings.whitelist_only && whitelist.indexOf(sender) < 0) {
+    refund(sender, amount, currency, 'whitelist_only');
+    return;
+  }
+
+  // Check if this author has gone over the max bids per author per round
+  if(config.max_per_author_per_round && config.max_per_author_per_round > 0) {
+    if(outstanding_bids.filter(b => b.author == author).length >= config.max_per_author_per_round)
+    {
+      refund(sender, amount, currency, 'bids_per_round');
+      return;
+    }
+  }
+
+  var push_to_next_round = false;
+  validatePost(author, permLink, function(error) {
+    if(error && error != 'min_age') {
+      refund(sender, amount, currency, error);
+      return;
+    }
+
+    // Check if the round is full
+    if(checkRoundFillLimit(outstanding_bids, amount, currency)) {
+      if(checkRoundFillLimit(next_round, amount, currency)) {
+        refund(sender, amount, currency, 'next_round_full');
+        return;
+      } else {
+        push_to_next_round = true;
+        refund(sender, 0.001, currency, 'round_full');
       }
     }
 
-    var push_to_next_round = false;
+    // Add the bid to the current round or the next round if the current one is full or the post is too new
+    var round = (push_to_next_round || error == 'min_age') ? next_round : outstanding_bids;
 
-    steem.api.getContent(author, permLink, function (err, result) {
-        if (!err && result && result.id > 0) {
+    // Check if there is already a bid for this post in the current round
+    var existing_bid = round.find(bid => bid.url == result.url);
 
-            // If comments are not allowed then we need to first check if the post is a comment
-            if(!config.allow_comments && (result.parent_author != null && result.parent_author != '')) {
-              refund(sender, amount, currency, 'no_comments');
-              return;
-            }
+    if(existing_bid) {
+      // There is already a bid for this post in the current round
+      utils.log('Existing Bid Found - New Amount: ' + amount + ', Total Amount: ' + (existing_bid.amount + amount));
 
-            // Check if any tags on this post are blacklisted in the settings
-            if (config.blacklist_settings.blacklisted_tags && config.blacklist_settings.blacklisted_tags.length > 0 && result.json_metadata && result.json_metadata != '') {
-              var tags = JSON.parse(result.json_metadata).tags;
+      var new_amount = 0;
 
-              if (tags && tags.length > 0) {
-                var tag = tags.find(t => config.blacklist_settings.blacklisted_tags.indexOf(t) >= 0);
+      if(existing_bid.currency == currency) {
+        new_amount = existing_bid.amount + amount;
+      } else if(existing_bid.currency == 'STEEM') {
+        new_amount = existing_bid.amount + amount * sbd_price / steem_price;
+      } else if(existing_bid.currency == 'SBD') {
+        new_amount = existing_bid.amount + amount * steem_price / sbd_price;
+      }
 
-                if(tag) {
-                  refund(sender, amount, currency, 'blacklist_tag', 0, tag);
-                  return;
-                }
-              }
-            }
+      var max_bid = config.max_bid ? parseFloat(config.max_bid) : 9999;
 
-            var created = new Date(result.created + 'Z');
-            var time_until_vote = utils.timeTilFullPower(utils.getVotingPower(account));
+      // Check that the new total doesn't exceed the max bid amount per post
+      if (new_amount > max_bid)
+        refund(sender, amount, currency, 'above_max_bid');
+      else
+        existing_bid.amount = new_amount;
+    } else {
+      // All good - push to the array of valid bids for this round
+      utils.log('Valid Bid - Amount: ' + amount + ' ' + currency + ', Title: ' + result.title);
+      round.push({ amount: amount, currency: currency, sender: sender, author: result.author, permlink: result.permlink, url: result.url });
+    }
 
-            // Get the list of votes on this post to make sure the bot didn't already vote on it (you'd be surprised how often people double-submit!)
-            var votes = result.active_votes.filter(function(vote) { return vote.voter == account.name; });
-
-            if (votes.length > 0 || (new Date() - created) >= (config.max_post_age * 60 * 60 * 1000)) {
-                // This post is already voted on by this bot or the post is too old to be voted on
-                refund(sender, amount, currency, ((votes.length > 0) ? 'already_voted' : 'max_age'));
-                return;
-            }
-
-            // Check if this post has been flagged by any flag signal accounts
-            if(config.blacklist_settings.flag_signal_accounts) {
-              var flags = result.active_votes.filter(function(v) { return v.percent < 0 && config.blacklist_settings.flag_signal_accounts.indexOf(v.voter) >= 0; });
-
-              if(flags.length > 0) {
-                handleFlag(sender, amount, currency);
-                return;
-              }
-            }
-
-            // Check if this post is below the minimum post age
-            if(config.min_post_age && config.min_post_age > 0 && (new Date() - created + (time_until_vote * 1000)) < (config.min_post_age * 60 * 1000)) {
-              push_to_next_round = true;
-              refund(sender, 0.001, currency, 'min_age');
-            }
-        } else if(result && result.id == 0) {
-          // Invalid memo
-          refund(sender, amount, currency, 'invalid_post_url');
-          return;
-        } else {
-          logError('Error loading post: ' + memo + ', Error: ' + err);
-
-          // Try again on error
-          if(retries < 2)
-            setTimeout(function() { checkPost(memo, amount, currency, sender, retries + 1); }, 3000);
-          else {
-            utils.log('============= Load post failed three times for: ' + memo + ' ===============');
-
-            refund(sender, amount, currency, 'invalid_post_url');
-            return;
-          }
-        }
-
-        if(!push_to_next_round && checkRoundFillLimit(outstanding_bids, amount, currency)) {
-          if(checkRoundFillLimit(next_round, amount, currency)) {
-            refund(sender, amount, currency, 'next_round_full');
-            return;
-          } else {
-            push_to_next_round = true;
-            refund(sender, 0.001, currency, 'round_full');
-          }
-        }
-
-        // Add the bid to the current round or the next round if the current one is full or the post is too new
-        var round = push_to_next_round ? next_round : outstanding_bids;
-
-        // Check if there is already a bid for this post in the current round
-        var existing_bid = round.find(bid => bid.url == result.url);
-
-        if(existing_bid) {
-          // There is already a bid for this post in the current round
-          utils.log('Existing Bid Found - New Amount: ' + amount + ', Total Amount: ' + (existing_bid.amount + amount));
-
-          var new_amount = 0;
-
-          if(existing_bid.currency == currency) {
-            new_amount = existing_bid.amount + amount;
-          } else if(existing_bid.currency == 'STEEM') {
-            new_amount = existing_bid.amount + amount * sbd_price / steem_price;
-          } else if(existing_bid.currency == 'SBD') {
-            new_amount = existing_bid.amount + amount * steem_price / sbd_price;
-          }
-
-          var max_bid = config.max_bid ? parseFloat(config.max_bid) : 9999;
-
-          // Check that the new total doesn't exceed the max bid amount per post
-          if (new_amount > max_bid)
-            refund(sender, amount, currency, 'above_max_bid');
-          else
-            existing_bid.amount = new_amount;
-        } else {
-          // All good - push to the array of valid bids for this round
-          utils.log('Valid Bid - Amount: ' + amount + ' ' + currency + ', Title: ' + result.title);
-          round.push({ amount: amount, currency: currency, sender: sender, author: result.author, permlink: result.permlink, url: result.url });
-        }
-
-        // If a witness_vote transfer memo is set, check if the sender votes for the bot owner as witness and send them a message if not
-        if (config.transfer_memos['witness_vote'] && config.transfer_memos['witness_vote'] != '') {
-          checkWitnessVote(sender, sender, currency);
-        } else if(!push_to_next_round && config.transfer_memos['bid_confirmation'] && config.transfer_memos['bid_confirmation'] != '') {
-					// Send bid confirmation transfer memo if one is specified
-					refund(sender, 0.001, currency, 'bid_confirmation', 0);
-				}
-    });
+    // If a witness_vote transfer memo is set, check if the sender votes for the bot owner as witness and send them a message if not
+    if (config.transfer_memos['witness_vote'] && config.transfer_memos['witness_vote'] != '') {
+      checkWitnessVote(sender, sender, currency);
+    } else if(!push_to_next_round && config.transfer_memos['bid_confirmation'] && config.transfer_memos['bid_confirmation'] != '') {
+      // Send bid confirmation transfer memo if one is specified
+      refund(sender, 0.001, currency, 'bid_confirmation', 0);
+    }
+  });
 }
 
 function handleBlacklist(author, sender, amount, currency) {
@@ -746,11 +781,7 @@ function refund(sender, amount, currency, reason, retries, data) {
   }
 
   // Replace variables in the memo text
-	var memo = config.transfer_memos[reason];
-	
-	if(!memo)
-		memo = 'Refund for invalid bid - ' + reason;
-
+  var memo = config.transfer_memos[reason];
   memo = memo.replace(/{amount}/g, utils.format(amount, 3) + ' ' + currency);
   memo = memo.replace(/{currency}/g, currency);
   memo = memo.replace(/{min_bid}/g, config.min_bid);
