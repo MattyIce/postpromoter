@@ -508,6 +508,8 @@ function checkPost(memo, amount, currency, sender, retries) {
 
     var push_to_next_round = false;
 
+    var contain_promotion_tag = false;
+
     steem.api.getContent(author, permLink, function (err, result) {
         if (!err && result && result.id > 0) {
 
@@ -558,6 +560,23 @@ function checkPost(memo, amount, currency, sender, retries) {
               push_to_next_round = true;
               refund(sender, 0.001, currency, 'min_age');
             }
+
+            // Check if this post contain tags that the bot wants to promote
+            if(config.allow_tag_promotion && config.promoted_tags.length>0){
+              var tags = JSON.parse(result['json_metadata'])['tags'];
+              for(var i = 0; i < config.promoted_tags.length; i++) {
+                for(var j = 0; j < tags.length; j++){
+                  if(config.promoted_tags[i]==tags[j]){
+                    contain_promotion_tag = true;
+                    break;
+                  }
+                }
+                if(contain_promotion_tag){
+                  break;
+                }
+              }
+            }
+
         } else if(result && result.id == 0) {
           // Invalid memo
           refund(sender, amount, currency, 'invalid_post_url');
@@ -616,7 +635,14 @@ function checkPost(memo, amount, currency, sender, retries) {
             existing_bid.amount = new_amount;
         } else {
           // All good - push to the array of valid bids for this round
+
+
           utils.log('Valid Bid - Amount: ' + amount + ' ' + currency + ', Title: ' + result.title);
+          if(contain_promotion_tag){
+            amount = amount * (1+config.promote_ratio);
+            utils.log('This post contain promoting tags! Voting Weight up ' + config.promote_ratio*100 + '%');
+          }
+
           round.push({ amount: amount, currency: currency, sender: sender, author: result.author, permlink: result.permlink, url: result.url });
         }
 
