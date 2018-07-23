@@ -37,7 +37,7 @@ var HOURS = 60 * 60;
       log('Error loading global properties: ' + e);
     });
 
-    setTimeout(updateSteemVariables, 180 * 1000)
+    setTimeout(function() { updateSteemVariables(client); }, 180 * 1000)
  }
 
  function vestsToSP(vests) { return vests / 1000000 * steem_per_mvests; }

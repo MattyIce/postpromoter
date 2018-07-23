@@ -1,5 +1,5 @@
 var fs = require("fs");
-const steem = require('steem');
+var steem = require('steem');
 var dsteem = require('dsteem');
 var utils = require('./utils');
 
@@ -21,6 +21,7 @@ var steem_price = 1;  // This will get overridden with actual prices if a price_
 var sbd_price = 1;    // This will get overridden with actual prices if a price_feed_url is specified in settings
 var version = '2.1.0';
 var client = null;
+var rpc_node = null;
 
 startup();
 
@@ -29,9 +30,8 @@ function startup() {
   loadConfig();
 
   // Connect to the specified RPC node
-  var rpc_node = config.rpc_nodes ? config.rpc_nodes[0] : (config.rpc_node ? config.rpc_node : 'https://api.steemit.com');
-  steem.api.setOptions({ transport: 'http', uri: rpc_node, url: rpc_node });
-  client = new dsteem.Client(rpc_node)
+  rpc_node = config.rpc_nodes ? config.rpc_nodes[0] : (config.rpc_node ? config.rpc_node : 'https://api.steemit.com');
+  client = new dsteem.Client(rpc_node);
 
   utils.log("* START - Version: " + version + " *");
   utils.log("Connected to: " + rpc_node);
@@ -40,7 +40,7 @@ function startup() {
     utils.log('*** RUNNING IN BACKUP MODE ***');
 
   // Load Steem global variables
-  utils.updateSteemVariables();
+  utils.updateSteemVariables(client);
 
   // If the API is enabled, start the web server
   if(config.api && config.api.enabled) {
@@ -169,7 +169,7 @@ function startProcess() {
       getTransactions(saveState);
       
       // Check if there are any rewards to claim.
-      claimRewards();
+      //claimRewards();
 
       // Check if it is time to withdraw funds.
       if (config.auto_withdrawal.frequency == 'daily')
@@ -256,29 +256,29 @@ function sendVote(bid, retries, callback) {
       if(callback)
         callback();
     } else {
-      steem.broadcast.vote(config.posting_key, account.name, bid.author, bid.permlink, bid.weight, function (err, result) {
-        if (!err && result) {
+      client.broadcast.vote({ voter: account.name, author: bid.author, permlink: bid.permlink, weight: bid.weight }, dsteem.PrivateKey.fromString(config.posting_key)).then(function(result) {
+        if (result) {
           utils.log(utils.format(bid.weight / 100) + '% vote cast for: @' + bid.author + '/' + bid.permlink);
 
           if (callback)
             callback();
-        } else {
-          logError('Error sending vote for: @' + bid.author + '/' + bid.permlink + ', Error: ' + err);
+        }
+      }, function(err) {
+        logError('Error sending vote for: @' + bid.author + '/' + bid.permlink + ', Error: ' + err);
 
-          // Try again on error
-          if(retries < 2)
-            setTimeout(function() { sendVote(bid, retries + 1, callback); }, 10000);
-          else {
-            utils.log('============= Vote transaction failed three times for: @' + bid.author + '/' + bid.permlink + ' Bid Amount: ' + bid.amount + ' ' + bid.currency + ' ===============');
-            logFailedBid(bid, err);
+        // Try again on error
+        if(retries < 2)
+          setTimeout(function() { sendVote(bid, retries + 1, callback); }, 10000);
+        else {
+          utils.log('============= Vote transaction failed three times for: @' + bid.author + '/' + bid.permlink + ' Bid Amount: ' + bid.amount + ' ' + bid.currency + ' ===============');
+          logFailedBid(bid, err);
 
-            if (callback)
-              callback();
-          }
+          if (callback)
+            callback();
         }
       });
     }
-  }
+  });
 }
 
 function sendComment(bid) {
@@ -299,14 +299,21 @@ function sendComment(bid) {
     // Replace variables in the promotion content
     content = content.replace(/\{weight\}/g, utils.format(bid.weight / 100)).replace(/\{botname\}/g, config.account).replace(/\{sender\}/g, bid.sender);
 
+    var comment = { 
+      author: account.name, 
+      permlink: permlink, 
+      parent_author: bid.author, 
+      parent_permlink: bid.permlink, 
+      title: permlink, 
+      body: content, 
+      json_metadata: '{"app":"postpromoter/' + version + '"}' 
+    };
+
     // Broadcast the comment
-    steem.broadcast.comment(config.posting_key, bid.author, bid.permlink, account.name, permlink, permlink, content, '{"app":"postpromoter/' + version + '"}', function (err, result) {
-      if (!err && result) {
+    client.broadcast.comment(comment, dsteem.PrivateKey.fromString(config.posting_key)).then(function (result) {
+      if (result)
         utils.log('Posted comment: ' + permlink);
-      } else {
-        logError('Error posting comment: ' + permlink);
-      }
-    });
+    }, function(err) { logError('Error posting comment: ' + permlink); });
   }
 
   // Check if the bot should resteem this post
@@ -321,12 +328,11 @@ function resteem(bid) {
     permlink: bid.permlink
   }]);
 
-  steem.broadcast.customJson(config.posting_key, [], [config.account], 'follow', json, (err, result) => {
-    if (!err && result) {
+  client.broadcast.json({ id: 'follow', json: json, required_auths: [], required_posting_auths: [config.account] }, dsteem.PrivateKey.fromString(config.posting_key)).then(function(result) {
+    if (result)
       utils.log('Resteemed Post: @' + bid.sender + '/' + bid.permlink);
-    } else {
+  }, function(err) {
       utils.log('Error resteeming post: @' + bid.sender + '/' + bid.permlink);
-    }
   });
 }
 
@@ -650,8 +656,8 @@ function checkPost(memo, amount, currency, sender, retries) {
         existing_bid.amount = new_amount;
     } else {
       // All good - push to the array of valid bids for this round
-      utils.log('Valid Bid - Amount: ' + amount + ' ' + currency + ', Title: ' + result.title);
-      round.push({ amount: amount, currency: currency, sender: sender, author: result.author, permlink: result.permlink, url: result.url });
+      utils.log('Valid Bid - Amount: ' + amount + ' ' + currency + ', Url: ' + memo);
+      round.push({ amount: amount, currency: currency, sender: sender, author: author, permlink: permLink, url: memo });
     }
 
     // If a witness_vote transfer memo is set, check if the sender votes for the bot owner as witness and send them a message if not
@@ -702,8 +708,8 @@ function checkWitnessVote(sender, voter, currency) {
   if(!config.owner_account || config.owner_account == '')
     return;
 
-  steem.api.getAccounts([voter], function (err, result) {
-    if (result && !err) {
+  client.database.getAccounts([voter]).then(function (result) {
+    if (result) {
       if (result[0].proxy && result[0].proxy != '') {
         checkWitnessVote(sender, result[0].proxy, currency);
         return;
@@ -715,8 +721,9 @@ function checkWitnessVote(sender, voter, currency) {
 				// Send bid confirmation transfer memo if one is specified
 				refund(sender, 0.001, currency, 'bid_confirmation', 0);
 			}
-    } else
-      logError('Error loading sender account to check witness vote: ' + err);
+    } 
+  }, function(err) {
+    logError('Error loading sender account to check witness vote: ' + err);
   });
 }
 
@@ -798,21 +805,20 @@ function refund(sender, amount, currency, reason, retries, data) {
   memo = memo.replace(/{max_age}/g, days + ' Day(s)' + ((hours > 0) ? ' ' + hours + ' Hour(s)' : ''));
 
   // Issue the refund.
-  steem.broadcast.transfer(config.active_key, config.account, sender, utils.format(amount, 3) + ' ' + currency, memo, function (err, response) {
-    if (err) {
-      logError('Error sending refund to @' + sender + ' for: ' + amount + ' ' + currency + ', Error: ' + err);
+  client.broadcast.transfer({ amount: utils.format(amount, 3) + ' ' + currency, from: config.account, to: sender, memo: memo }, dsteem.PrivateKey.fromString(config.active_key)).then(function(response) {
+    utils.log('Refund of ' + amount + ' ' + currency + ' sent to @' + sender + ' for reason: ' + reason);
+  }, function(err) {
+    logError('Error sending refund to @' + sender + ' for: ' + amount + ' ' + currency + ', Error: ' + err);
 
-      // Try again on error
-      if(retries < 2)
-        setTimeout(function() { refund(sender, amount, currency, reason, retries + 1, data) }, (Math.floor(Math.random() * 10) + 3) * 1000);
-      else
-        utils.log('============= Refund failed three times for: @' + sender + ' ===============');
-    } else {
-      utils.log('Refund of ' + amount + ' ' + currency + ' sent to @' + sender + ' for reason: ' + reason);
-    }
+    // Try again on error
+    if(retries < 2)
+      setTimeout(function() { refund(sender, amount, currency, reason, retries + 1, data) }, (Math.floor(Math.random() * 10) + 3) * 1000);
+    else
+      utils.log('============= Refund failed three times for: @' + sender + ' ===============');
   });
 }
 
+/*
 function claimRewards() {
   if (!config.auto_claim_rewards || config.backup_mode)
     return;
@@ -862,7 +868,7 @@ function claimRewards() {
       }
     });
   }
-}
+*/
 
 function checkAutoWithdraw() {
   // Check if auto-withdraw is active
@@ -1000,8 +1006,8 @@ function processWithdrawals() {
       var account_names = withdrawals.map(w => w.to).filter((v, i, s) => s.indexOf(v) === i);
 
       // Load account info to get memo keys for encryption
-      steem.api.getAccounts(account_names, function (err, result) {
-        if (result && !err) {
+      client.database.getAccounts(account_names).then(function (result) {
+        if (result) {
           for(var i = 0; i < result.length; i++) {
             var withdrawal_account = result[i];
             var matches = withdrawals.filter(w => w.to == withdrawal_account.name);
@@ -1012,8 +1018,9 @@ function processWithdrawals() {
           }
 
           sendWithdrawals(withdrawals);
-        } else
-          logError('Error loading withdrawal accounts: ' + err);
+        }
+      }, function(err) {
+        logError('Error loading withdrawal accounts: ' + err);
       });
     } else
       sendWithdrawals(withdrawals);
@@ -1062,21 +1069,19 @@ function sendWithdrawal(withdrawal, retries, callback) {
     memo = steem.memo.encode(config.memo_key, withdrawal.memo_key, memo);
 
   // Send the withdrawal amount to the specified account
-  steem.broadcast.transfer(config.active_key, config.account, withdrawal.to, formatted_amount, memo, function (err, response) {
-    if (err) {
-      logError('Error sending withdrawal transaction to: ' + withdrawal.to + ', Error: ' + err);
+  client.broadcast.transfer({ amount: formatted_amount, from: config.account, to: withdrawal.to, memo: memo }, dsteem.PrivateKey.fromString(config.active_key)).then(function(response) {
+    utils.log('$$$ Auto withdrawal: ' + formatted_amount + ' sent to @' + withdrawal.to);
 
-      // Try again once if there is an error
-      if(retries < 1)
-        setTimeout(function() { sendWithdrawal(withdrawal, retries + 1, callback); }, 3000);
-      else {
-        utils.log('============= Withdrawal failed two times to: ' + withdrawal.to + ' for: ' + formatted_amount + ' ===============');
+    if(callback)
+      callback();
+  }, function(err) {
+    logError('Error sending withdrawal transaction to: ' + withdrawal.to + ', Error: ' + err);
 
-        if(callback)
-          callback();
-      }
-    } else {
-      utils.log('$$$ Auto withdrawal: ' + formatted_amount + ' sent to @' + withdrawal.to);
+    // Try again once if there is an error
+    if(retries < 1)
+      setTimeout(function() { sendWithdrawal(withdrawal, retries + 1, callback); }, 3000);
+    else {
+      utils.log('============= Withdrawal failed two times to: ' + withdrawal.to + ' for: ' + formatted_amount + ' ===============');
 
       if(callback)
         callback();
@@ -1217,14 +1222,14 @@ function failover() {
     // Give it a minute after the failover to account for more errors coming in from the original node
     setTimeout(function() { error_count = 0; }, 60 * 1000);
 
-    var cur_node_index = config.rpc_nodes.indexOf(steem.api.options.url) + 1;
+    var cur_node_index = config.rpc_nodes.indexOf(rpc_node) + 1;
 
     if(cur_node_index == config.rpc_nodes.length)
       cur_node_index = 0;
 
-    var rpc_node = config.rpc_nodes[cur_node_index];
+    rpc_node = config.rpc_nodes[cur_node_index];
 
-    steem.api.setOptions({ transport: 'http', uri: rpc_node, url: rpc_node });
+    client = new dsteem.Client(rpc_node);
     utils.log('');
     utils.log('***********************************************');
     utils.log('Failing over to: ' + rpc_node);
@@ -1239,7 +1244,7 @@ function logError(message) {
   if (message.indexOf('assert_exception') < 0 && message.indexOf('ERR_ASSERTION') < 0)
     error_count++;
 
-  utils.log('Error Count: ' + error_count + ', Current node: ' + steem.api.options.url);
+  utils.log('Error Count: ' + error_count + ', Current node: ' + rpc_node);
   utils.log(message);
 }
 
