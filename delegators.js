@@ -1,22 +1,18 @@
 const steem = require('steem');
 var utils = require('./utils');
+var dsteem = require('dsteem');
 
 var delegation_transactions = [];
 
-function loadDelegations(account, callback) {
-  getTransactions(account, -1, callback);
+function loadDelegations(client, account, callback) {
+  getTransactions(client, account, -1, callback);
 }
 
-function getTransactions(account, start, callback) {
+function getTransactions(client, account, start, callback) {
   var last_trans = start;
 	utils.log('Loading history for delegators at transaction: ' + (start < 0 ? 'latest' : start));
-	
-  steem.api.getAccountHistory(account, start, (start < 0) ? 10000 : Math.min(start, 10000), function (err, result) {
-    if(err) {
-      console.log(err);
-      return;
-    }
-
+  
+  client.database.call('get_account_history', [account, start, (start < 0) ? 10000 : Math.min(start, 10000)]).then(function (result) {
     result.reverse();
 
 		for(var i = 0; i < result.length; i++) {
@@ -31,7 +27,7 @@ function getTransactions(account, start, callback) {
     }
 		
     if(last_trans > 0 && last_trans != start)
-      getTransactions(account, last_trans, callback);
+      getTransactions(client, account, last_trans, callback);
     else {
 			if(last_trans > 0) {
 				utils.log('********* ALERT - Full account history not available from this node, not all delegators may have been loaded!! ********');
@@ -40,7 +36,7 @@ function getTransactions(account, start, callback) {
 			
       processDelegations(callback);
 		}
-  });
+  }, function(err) { console.log('Error loading account history for delegations: ' + err); });
 }
 
 function processDelegations(callback) {

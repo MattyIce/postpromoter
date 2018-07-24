@@ -99,7 +99,7 @@ function startup() {
     {
       var del = require('./delegators');
       utils.log('Started loading delegators from account history...');
-      del.loadDelegations(config.account, function(d) {
+      del.loadDelegations(client, config.account, function(d) {
         delegators = d;
         var vests = delegators.reduce(function (total, v) { return total + parseFloat(v.vesting_shares); }, 0);
         utils.log('Delegators Loaded (from account history) - ' + delegators.length + ' delegators and ' + vests + ' VESTS in total!');
