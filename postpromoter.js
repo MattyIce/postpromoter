@@ -169,7 +169,7 @@ function startProcess() {
       getTransactions(saveState);
       
       // Check if there are any rewards to claim.
-      //claimRewards();
+      claimRewards();
 
       // Check if it is time to withdraw funds.
       if (config.auto_withdrawal.frequency == 'daily')
@@ -818,18 +818,14 @@ function refund(sender, amount, currency, reason, retries, data) {
   });
 }
 
-/*
 function claimRewards() {
   if (!config.auto_claim_rewards || config.backup_mode)
     return;
 
   // Make api call only if you have actual reward
   if (parseFloat(account.reward_steem_balance) > 0 || parseFloat(account.reward_sbd_balance) > 0 || parseFloat(account.reward_vesting_balance) > 0) {
-    steem.broadcast.claimRewardBalance(config.posting_key, config.account, account.reward_steem_balance, account.reward_sbd_balance, account.reward_vesting_balance, function (err, result) {
-      if (err) {
-        utils.log('Error claiming rewards...will try again next time.');
-      }
-
+    var op = ['claim_reward_balance', { account: config.account, reward_sbd: account.reward_sbd_balance, reward_steem: account.reward_steem_balance, reward_vests: account.reward_vesting_balance }];
+    client.broadcast.sendOperations([op], dsteem.PrivateKey.fromString(config.posting_key)).then(function(result) {
       if (result) {
         if(config.detailed_logging) {
           var rewards_message = "$$$ ==> Rewards Claim";
@@ -844,31 +840,23 @@ function claimRewards() {
         if(parseFloat(account.reward_sbd_balance) > 0 && config.post_rewards_withdrawal_account && config.post_rewards_withdrawal_account != '') {
 
           // Send liquid post rewards to the specified account
-          steem.broadcast.transfer(config.active_key, config.account, config.post_rewards_withdrawal_account, account.reward_sbd_balance, 'Liquid Post Rewards Withdrawal', function (err, response) {
-            if (err)
-              utils.log(err, response);
-            else {
-              utils.log('$$$ Auto withdrawal - liquid post rewards: ' + account.reward_sbd_balance + ' sent to @' + config.post_rewards_withdrawal_account);
-            }
-          });
+          client.broadcast.transfer({ amount: account.reward_sbd_balance, from: config.account, to: config.post_rewards_withdrawal_account, memo: 'Liquid Post Rewards Withdrawal' }, dsteem.PrivateKey.fromString(config.active_key)).then(function(response) {
+            utils.log('$$$ Auto withdrawal - liquid post rewards: ' + account.reward_sbd_balance + ' sent to @' + config.post_rewards_withdrawal_account);
+          }, function(err) { utils.log('Error transfering liquid SBD post rewards: ' + err); });
         }
 
 				// If there are liquid STEEM rewards, withdraw them to the specified account
         if(parseFloat(account.reward_steem_balance) > 0 && config.post_rewards_withdrawal_account && config.post_rewards_withdrawal_account != '') {
 
           // Send liquid post rewards to the specified account
-          steem.broadcast.transfer(config.active_key, config.account, config.post_rewards_withdrawal_account, account.reward_steem_balance, 'Liquid Post Rewards Withdrawal', function (err, response) {
-            if (err)
-              utils.log(err, response);
-            else {
-              utils.log('$$$ Auto withdrawal - liquid post rewards: ' + account.reward_steem_balance + ' sent to @' + config.post_rewards_withdrawal_account);
-            }
-          });
+          client.broadcast.transfer({ amount: account.reward_steem_balance, from: config.account, to: config.post_rewards_withdrawal_account, memo: 'Liquid Post Rewards Withdrawal' }, dsteem.PrivateKey.fromString(config.active_key)).then(function(response) {
+            utils.log('$$$ Auto withdrawal - liquid post rewards: ' + account.reward_steem_balance + ' sent to @' + config.post_rewards_withdrawal_account);
+          }, function(err) { utils.log('Error transfering liquid STEEM post rewards: ' + err); });
         }
       }
-    });
+    }, function(err) { utils.log('Error claiming rewards...will try again next time.'); });
   }
-*/
+}
 
 function checkAutoWithdraw() {
   // Check if auto-withdraw is active
