@@ -568,6 +568,21 @@ function validatePost(author, permlink, callback, retries) {
 }
 
 function checkPost(memo, amount, currency, sender, retries) {
+  var affiliate = null;
+
+  // Check if this bid is through an affiliate service
+  if(config.affiliates && config.affiliates.length > 0) {
+    for(var i = 0; i < config.affiliates.length; i++) {
+      var cur = config.affiliates[i];
+
+      if(memo.startsWith(cur.name)) {
+        memo = memo.split(' ')[1];
+        affiliate = cur;
+        break;
+      }
+    }
+  }
+
   // Parse the author and permlink from the memo URL
   var permLink = memo.substr(memo.lastIndexOf('/') + 1);
   var site = memo.substring(memo.indexOf('://')+3,memo.indexOf('/', memo.indexOf('://')+3));
@@ -658,6 +673,11 @@ function checkPost(memo, amount, currency, sender, retries) {
       // All good - push to the array of valid bids for this round
       utils.log('Valid Bid - Amount: ' + amount + ' ' + currency + ', Url: ' + memo);
       round.push({ amount: amount, currency: currency, sender: sender, author: author, permlink: permLink, url: memo });
+
+      // If this bid is through an affiliate service, send the fee payout
+      if(affiliate) {
+        refund(affiliate.beneficiary, amount * (affiliate.fee_pct / 10000), currency, 'affiliate');
+      }
     }
 
     // If a witness_vote transfer memo is set, check if the sender votes for the bot owner as witness and send them a message if not
