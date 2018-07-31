@@ -809,6 +809,10 @@ function refund(sender, amount, currency, reason, retries, data) {
 
   // Replace variables in the memo text
   var memo = config.transfer_memos[reason];
+
+  if(!memo)
+    memo = reason;
+
   memo = memo.replace(/{amount}/g, utils.format(amount, 3) + ' ' + currency);
   memo = memo.replace(/{currency}/g, currency);
   memo = memo.replace(/{min_bid}/g, config.min_bid);
