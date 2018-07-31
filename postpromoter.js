@@ -676,7 +676,7 @@ function checkPost(memo, amount, currency, sender, retries) {
 
       // If this bid is through an affiliate service, send the fee payout
       if(affiliate) {
-        refund(affiliate.beneficiary, amount * (affiliate.fee_pct / 10000), currency, 'affiliate');
+        refund(affiliate.beneficiary, amount * (affiliate.fee_pct / 10000), currency, 'affiliate', 0, 'Sender: @' + sender + ', Post: ' + memo);
       }
     }
 
