@@ -249,7 +249,7 @@ function comment(bids) {
 function sendVote(bid, retries, callback) {
   utils.log('Casting: ' + utils.format(bid.weight / 100) + '% vote cast for: @' + bid.author + '/' + bid.permlink);
   
-  validatePost(bid.author, bid.permlink, function(e) {
+  validatePost(bid.author, bid.permlink, true, function(e) {
     if(e) {
       utils.log('Post @' + bid.author + '/' + bid.permlink + ' is invalid for reason: ' + e);
 
@@ -478,7 +478,7 @@ function checkRoundFillLimit(round, amount, currency) {
   return (vote_value_usd * 0.75 * config.round_fill_limit < bid_value + new_bid_value);
 }
 
-function validatePost(author, permlink, callback, retries) {
+function validatePost(author, permlink, isVoting, callback, retries) {
   client.database.call('get_content', [author, permlink]).then(function (result) {
     if (result && result.id > 0) {
 
@@ -507,7 +507,7 @@ function validatePost(author, permlink, callback, retries) {
         }
 
         var created = new Date(result.created + 'Z');
-        var time_until_vote = utils.timeTilFullPower(utils.getVotingPower(account));
+        var time_until_vote = isVoting ? 0 : utils.timeTilFullPower(utils.getVotingPower(account));
 
         // Get the list of votes on this post to make sure the bot didn't already vote on it (you'd be surprised how often people double-submit!)
         var votes = result.active_votes.filter(function(vote) { return vote.voter == account.name; });
@@ -555,7 +555,7 @@ function validatePost(author, permlink, callback, retries) {
 
       // Try again on error
       if(retries < 2)
-        setTimeout(function() { validatePost(author, permlink, callback, retries + 1); }, 3000);
+        setTimeout(function() { validatePost(author, permlink, isVoting, callback, retries + 1); }, 3000);
       else {
         utils.log('============= Validate post failed three times for: ' + memo + ' ===============');
         
@@ -625,7 +625,7 @@ function checkPost(memo, amount, currency, sender, retries) {
   }
 
   var push_to_next_round = false;
-  validatePost(author, permLink, function(error) {
+  validatePost(author, permLink, false, function(error) {
     if(error && error != 'min_age') {
       refund(sender, amount, currency, error);
       return;
