@@ -38,7 +38,8 @@
     "whitelist_only": false,
     "refund_blacklist": false,
     "blacklist_donation_account": "steemcleaners",
-    "blacklisted_tags": ["nsfw"]
+		"blacklisted_tags": ["nsfw"],
+		"global_api_blacklists": ["buildawhale", "steemcleaners", "minnowbooster"]
   },
   "auto_withdrawal": {
     "active": true,

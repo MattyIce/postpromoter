@@ -15,7 +15,7 @@
   "dependencies": {
     "dsteem": "^0.9.0",
     "express": "^4.16.2",
-    "request": "^2.83.0",
+    "request": "^2.88.0",
     "steem": "^0.7.1"
   }
 }

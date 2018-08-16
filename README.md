@@ -59,6 +59,7 @@ Then set the following options in config.json:
     "refund_blacklist": true,	// Whether or not to refund blacklisted users' bids
     "blacklist_donation_account": "steemcleaners", // If "refund_blacklist" is false, then this will send all bids from blacklisted users to the specified account as a donation
     "blacklisted_tags": ["nsfw", "other-tag"], // List of post tags that are not allowed by the bot. Bids for posts with one or more tags in this list will be refunded
+		"global_api_blacklists": ["buildawhale", "steemcleaners", "minnowbooster"] // global blacklist API http://blacklist.usesteem.com
   },
   "auto_withdrawal": {
     "active": true, // Activate the auto withdrawal function (will withdraw all accepted currencies)

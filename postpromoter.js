@@ -1,4 +1,5 @@
 var fs = require("fs");
+var request = require("request");
 var steem = require('steem');
 var dsteem = require('dsteem');
 var utils = require('./utils');
@@ -543,7 +544,7 @@ function validatePost(author, permlink, isVoting, callback, retries) {
         // Post is good!
         if(callback)
           callback();
-    } else if(result && result.id == 0) {
+    } else {
       // Invalid memo
       if(callback)
         callback('invalid_post_url');
@@ -624,74 +625,107 @@ function checkPost(memo, amount, currency, sender, retries) {
     }
   }
 
-  var push_to_next_round = false;
-  validatePost(author, permLink, false, function(error) {
-    if(error && error != 'min_age') {
-      refund(sender, amount, currency, error);
-      return;
-    }
+	var push_to_next_round = false;
+	checkGlobalBlacklist(author, sender, function(onBlacklist) {
+		if(onBlacklist) {
+			handleBlacklist(author, sender, amount, currency);
+    	return;
+		}
+		
+		validatePost(author, permLink, false, function(error) {
+			if(error && error != 'min_age') {
+				refund(sender, amount, currency, error);
+				return;
+			}
 
-    // Check if the round is full
-    if(checkRoundFillLimit(outstanding_bids, amount, currency)) {
-      if(checkRoundFillLimit(next_round, amount, currency)) {
-        refund(sender, amount, currency, 'next_round_full');
-        return;
-      } else {
-        push_to_next_round = true;
-        refund(sender, 0.001, currency, 'round_full');
-      }
-    }
+			// Check if the round is full
+			if(checkRoundFillLimit(outstanding_bids, amount, currency)) {
+				if(checkRoundFillLimit(next_round, amount, currency)) {
+					refund(sender, amount, currency, 'next_round_full');
+					return;
+				} else {
+					push_to_next_round = true;
+					refund(sender, 0.001, currency, 'round_full');
+				}
+			}
 
-    // Add the bid to the current round or the next round if the current one is full or the post is too new
-    var round = (push_to_next_round || error == 'min_age') ? next_round : outstanding_bids;
+			// Add the bid to the current round or the next round if the current one is full or the post is too new
+			var round = (push_to_next_round || error == 'min_age') ? next_round : outstanding_bids;
 
-    // Check if there is already a bid for this post in the current round
-    var existing_bid = round.find(bid => bid.url == memo);
+			// Check if there is already a bid for this post in the current round
+			var existing_bid = round.find(bid => bid.url == memo);
 
-    if(existing_bid) {
-      // There is already a bid for this post in the current round
-      utils.log('Existing Bid Found - New Amount: ' + amount + ', Total Amount: ' + (existing_bid.amount + amount));
+			if(existing_bid) {
+				// There is already a bid for this post in the current round
+				utils.log('Existing Bid Found - New Amount: ' + amount + ', Total Amount: ' + (existing_bid.amount + amount));
 
-      var new_amount = 0;
+				var new_amount = 0;
 
-      if(existing_bid.currency == currency) {
-        new_amount = existing_bid.amount + amount;
-      } else if(existing_bid.currency == 'STEEM') {
-        new_amount = existing_bid.amount + amount * sbd_price / steem_price;
-      } else if(existing_bid.currency == 'SBD') {
-        new_amount = existing_bid.amount + amount * steem_price / sbd_price;
-      }
+				if(existing_bid.currency == currency) {
+					new_amount = existing_bid.amount + amount;
+				} else if(existing_bid.currency == 'STEEM') {
+					new_amount = existing_bid.amount + amount * sbd_price / steem_price;
+				} else if(existing_bid.currency == 'SBD') {
+					new_amount = existing_bid.amount + amount * steem_price / sbd_price;
+				}
 
-      var max_bid = config.max_bid ? parseFloat(config.max_bid) : 9999;
+				var max_bid = config.max_bid ? parseFloat(config.max_bid) : 9999;
 
-      // Check that the new total doesn't exceed the max bid amount per post
-      if (new_amount > max_bid)
-        refund(sender, amount, currency, 'above_max_bid');
-      else
-        existing_bid.amount = new_amount;
-    } else {
-      // All good - push to the array of valid bids for this round
-      utils.log('Valid Bid - Amount: ' + amount + ' ' + currency + ', Url: ' + memo);
-      round.push({ amount: amount, currency: currency, sender: sender, author: author, permlink: permLink, url: memo });
+				// Check that the new total doesn't exceed the max bid amount per post
+				if (new_amount > max_bid)
+					refund(sender, amount, currency, 'above_max_bid');
+				else
+					existing_bid.amount = new_amount;
+			} else {
+				// All good - push to the array of valid bids for this round
+				utils.log('Valid Bid - Amount: ' + amount + ' ' + currency + ', Url: ' + memo);
+				round.push({ amount: amount, currency: currency, sender: sender, author: author, permlink: permLink, url: memo });
 
-      // If this bid is through an affiliate service, send the fee payout
-      if(affiliate) {
-        refund(affiliate.beneficiary, amount * (affiliate.fee_pct / 10000), currency, 'affiliate', 0, 'Sender: @' + sender + ', Post: ' + memo);
-      }
-    }
+				// If this bid is through an affiliate service, send the fee payout
+				if(affiliate) {
+					refund(affiliate.beneficiary, amount * (affiliate.fee_pct / 10000), currency, 'affiliate', 0, 'Sender: @' + sender + ', Post: ' + memo);
+				}
+			}
 
-    // If a witness_vote transfer memo is set, check if the sender votes for the bot owner as witness and send them a message if not
-    if (config.transfer_memos['witness_vote'] && config.transfer_memos['witness_vote'] != '') {
-      checkWitnessVote(sender, sender, currency);
-    } else if(!push_to_next_round && config.transfer_memos['bid_confirmation'] && config.transfer_memos['bid_confirmation'] != '') {
-      // Send bid confirmation transfer memo if one is specified
-      refund(sender, 0.001, currency, 'bid_confirmation', 0);
-    }
-  });
+			// If a witness_vote transfer memo is set, check if the sender votes for the bot owner as witness and send them a message if not
+			if (config.transfer_memos['witness_vote'] && config.transfer_memos['witness_vote'] != '') {
+				checkWitnessVote(sender, sender, currency);
+			} else if(!push_to_next_round && config.transfer_memos['bid_confirmation'] && config.transfer_memos['bid_confirmation'] != '') {
+				// Send bid confirmation transfer memo if one is specified
+				refund(sender, 0.001, currency, 'bid_confirmation', 0);
+			}
+		});
+	});
+}
+
+function checkGlobalBlacklist(author, sender, callback) {
+	if(!config.blacklist_settings || !config.blacklist_settings.global_api_blacklists || !Array.isArray(config.blacklist_settings.global_api_blacklists)) {
+		callback(null);
+		return;
+	}
+
+	request.get('http://blacklist.usesteem.com/user/' + author, function(e, r, data) {
+		try {
+			var result = JSON.parse(data);
+			
+			if(!result.blacklisted || !Array.isArray(result.blacklisted)) {
+				callback(null);
+				return;
+			}
+
+			if(author != sender) {
+				checkGlobalBlacklist(sender, sender, callback);
+			} else 
+				callback(config.blacklist_settings.global_api_blacklists.find(b => result.blacklisted.indexOf(b) >= 0));
+		} catch(err) {
+			utils.log('Error loading global blacklist info for user @' + author + ', Error: ' + err);
+			callback(null);
+		}
+	});
 }
 
 function handleBlacklist(author, sender, amount, currency) {
-  utils.log('Invalid Bid - @' + author + ' is on the blacklist!');
+  utils.log('Invalid Bid - @' + author + ((author != sender) ? ' or @' + sender : '') + ' is on the blacklist!');
 
   // Refund the bid only if blacklist_refunds are enabled in config
   if (config.blacklist_settings.refund_blacklist)
@@ -1102,9 +1136,6 @@ function sendWithdrawal(withdrawal, retries, callback) {
 }
 
 function loadPrices() {
-  // Require the "request" library for making HTTP requests
-  var request = require("request");
-
   if(config.price_source == 'coinmarketcap') {
     // Load the price feed data
     request.get('https://api.coinmarketcap.com/v1/ticker/steem/', function (e, r, data) {
