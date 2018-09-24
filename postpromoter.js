@@ -513,7 +513,7 @@ function validatePost(author, permlink, isVoting, callback, retries) {
         // Get the list of votes on this post to make sure the bot didn't already vote on it (you'd be surprised how often people double-submit!)
         var votes = result.active_votes.filter(function(vote) { return vote.voter == account.name; });
 
-        if (votes.length > 0 || (new Date() - created) >= (config.max_post_age * 60 * 60 * 1000)) {
+        if (votes.length > 0 || ((new Date() - created) >= (config.max_post_age * 60 * 60 * 1000) && !isVoting)) {
             // This post is already voted on by this bot or the post is too old to be voted on
             if(callback)
               callback(((votes.length > 0) ? 'already_voted' : 'max_age'));
