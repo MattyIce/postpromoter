@@ -51,6 +51,24 @@ var HOURS = 60 * 60;
      return current_power;
  }
 
+ function getVPHF20(account) {
+	var totalShares = parseFloat(account.vesting_shares) + parseFloat(account.received_vesting_shares) - parseFloat(account.delegated_vesting_shares);
+
+	var elapsed = Date.now() / 1000 - account.voting_manabar.last_update_time;
+	console.log(Date.now() / 1000 + ' - ' + account.voting_manabar.last_update_time);
+	var maxMana = totalShares * 1000000;
+	// 432000 sec = 5 days
+	var currentMana = parseFloat(account.voting_manabar.current_mana) + elapsed * maxMana / 432000;
+	
+	if (currentMana > maxMana) {
+		currentMana = maxMana;
+	}
+
+	var currentManaPerc = currentMana * 100 / maxMana;
+
+	return Math.round(currentManaPerc * 100);
+ }
+
  function getVoteRShares(voteWeight, account, power) {
      if (!account) {
          return;
@@ -175,5 +193,6 @@ function format(n, c, d, t) {
    getCurrency: getCurrency,
    format: format,
    toTimer: toTimer,
-   log: log
+	 log: log,
+	 getVPHF20: getVPHF20
  }
