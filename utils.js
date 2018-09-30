@@ -55,7 +55,6 @@ var HOURS = 60 * 60;
 	var totalShares = parseFloat(account.vesting_shares) + parseFloat(account.received_vesting_shares) - parseFloat(account.delegated_vesting_shares);
 
 	var elapsed = Date.now() / 1000 - account.voting_manabar.last_update_time;
-	console.log(Date.now() / 1000 + ' - ' + account.voting_manabar.last_update_time);
 	var maxMana = totalShares * 1000000;
 	// 432000 sec = 5 days
 	var currentMana = parseFloat(account.voting_manabar.current_mana) + elapsed * maxMana / 432000;
