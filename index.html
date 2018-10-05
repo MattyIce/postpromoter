@@ -32,6 +32,10 @@
         .tabs .indicator {
             background-color: #b2dfdb; 
         }
+        
+        .flow-text {
+            word-wrap: break-word;
+        }
     </style>
 </head>
 
@@ -50,7 +54,7 @@
         </nav>
     </header>
 
-    <main class="row">
+    <main class="container row">
         <div class="col s12 m12 center">
             <div class="card ">
                 <div class="card-content">
@@ -144,11 +148,15 @@
                                     `
                                 <div class="card">
                                     <div class="card-content">
-                                        Sender: ${r.sender} <br>
-                                        Author: ${r.author} <br>
-                                        URL: <a href="${r.url}">${r.url}</a><br>
-                                        Amount: ${r.amount} <br>
-                                        Weightage: ${r.weight/100}%
+                                        <p class="flow-text">
+                                            Sender: ${r.sender}
+                                            <br>
+                                            Author: ${r.author}
+                                            <br<
+                                            URL: <a href="${r.url}">${r.url}</a>
+                                            Amount: ${r.amount} ${r.currency}
+                                            Weightage: ${r.weight/100}%
+                                        </p>
                                     </div>
                                 </div>
                             `;
@@ -160,11 +168,17 @@
                                     `
                                 <div class="card">
                                     <div class="card-content">
-                                        Sender: ${r.sender} <br>
-                                        Author: ${r.author} <br>
-                                        URL: <a href="${r.url}">${r.url}</a><br>
-                                        Amount: ${r.amount} <br>
-                                        Weightage: ${r.weight/100}%
+                                        <p class="flow-text">
+                                            Sender: ${r.sender}
+                                            <br>
+                                            Author: ${r.author}
+                                            <br>
+                                            URL: <a href="${r.url}">${r.url}</a>
+                                            <br>
+                                            Amount: ${r.amount} ${r.currency}
+                                            <br>
+                                            Weightage: ${r.weight/100}%
+                                        </p>
                                     </div>
                                 </div>
                             `;
