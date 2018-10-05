@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>BID BOT</title>
+    <!-- Compiled and minified CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"
+        integrity="sha384-5KZdSYqynSzIjQGS2M1O3HW6HVDBjfNx0v5Y2eQuE3vvQ9NTiiPK9/GWc0yYCrgw" crossorigin="anonymous">
+    <style>
+        body {
+            display: flex;
+            min-height: 100vh;
+            flex-direction: column;
+        }
+
+        main {
+            flex: 1 0 auto;
+        }
+        
+
+        .tabs .tab a:hover {
+            background-color: #b2dfdb;
+        }
+
+        .tabs .tab a.active {
+            background-color: #80cbc4;
+        }
+        
+        .tabs .indicator {
+            background-color: #b2dfdb; 
+        }
+        
+        .flow-text {
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <nav>
+            <div class="nav-wrapper teal">
+                <a href="/" class="brand-logo">Bid Bot</a>
+                <!-- <ul id="nav-mobile" class="right hide-on-med-and-down">
+                    <li><a href="sass.html">Sass</a></li>
+                    <li><a href="badges.html">Components</a></li>
+                    <li><a href="collapsible.html">JavaScript</a></li>
+                </ul> -->
+            </div>
+        </nav>
+    </header>
+
+    <main class="container row">
+        <div class="col s12 m12 center">
+            <div class="card ">
+                <div class="card-content">
+                    <h1>Bid Bot</h1>
+                    <h5>Name: something</h5>
+                    <h5>Current VP: something%</h5>
+                </div>
+                <div class="card-tabs">
+                    <ul class="tabs tabs-fixed-width teal lighten-5">
+                        <li class="tab"><a class="active teal-text" href="#delegate"><h5>Delegate</h5></a></li>
+                        <li class="tab"><a class="teal-text" href="#bid"><h5>Bid</h5></a></li>
+                    </ul>
+                </div>
+                <div class="card-content grey lighten-4 teal-text">
+                    <div id="delegate">
+                        <h4>Delegate</h4>
+                    </div>
+                    <div id="bid">
+                        <h4>Bid</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row col s12 m6">
+            <h1>Current Round</h1><br>
+            <div class="current_round">
+                <div class="progress">
+                    <div class="indeterminate"></div>
+                </div>
+            </div>
+        </div>
+        <div class="row col s12 m6">
+            <h1>Last Round</h1><br>
+            <div class="last_round">
+                <div class="progress">
+                    <div class="indeterminate"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+
+    <footer class="page-footer teal">
+        <div class="footer-copyright">
+            <div class="container">
+                © 2018 Copyright 
+                <a class="grey-text text-lighten-4" href="https://steemit.com/@superoo7">@superoo7</a>
+            </div>
+        </div>
+    </footer>
+
+
+    <!-- Compiled and minified JavaScript -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js" integrity="sha384-ZOED+d9HxogEQwD+jFvux96iGQR9TxfJO+mPF2ZS0TuKH6eWrmvPsDpO6I0OWdiX"
+        crossorigin="anonymous"></script>
+
+    <script>
+        if (window.attachEvent) {
+            window.attachEvent('onload', fLoad);
+        } else {
+            if (window.onload) {
+                var curronload = window.onload;
+                var newonload = function (evt) {
+                    curronload(evt);
+                    fLoad(evt);
+                };
+                window.onload = newonload;
+            } else {
+                window.onload = fLoad;
+            }
+        }
+
+        function fLoad () {
+            // Materialize
+            var instance = M.Tabs.init(document.querySelector('.tabs'));
+
+            var currentRound = document.querySelector('.current_round');
+            var lastRound = document.querySelector('.last_round');
+
+            function fetchData() {
+                // fetch('/api/bids')
+                fetch('http://bot.wenghan.me/api/bids')
+                    .then(
+                        d => d.json()
+                    ).then(d => {
+                        currentRound.innerHTML = '';
+                        lastRound.innerHTML = '';
+                        d.current_round.map(
+                            r => {
+                                currentRound.innerHTML +=
+                                    `
+                                <div class="card">
+                                    <div class="card-content">
+                                        <p class="flow-text">
+                                            Sender: ${r.sender}
+                                            <br>
+                                            Author: ${r.author}
+                                            <br<
+                                            URL: <a href="${r.url}">${r.url}</a>
+                                            Amount: ${r.amount} ${r.currency}
+                                            Weightage: ${r.weight/100}%
+                                        </p>
+                                    </div>
+                                </div>
+                            `;
+                            }
+                        )
+                        d.last_round.map(
+                            r => {
+                                lastRound.innerHTML +=
+                                    `
+                                <div class="card">
+                                    <div class="card-content">
+                                        <p class="flow-text">
+                                            Sender: ${r.sender}
+                                            <br>
+                                            Author: ${r.author}
+                                            <br>
+                                            URL: <a href="${r.url}">${r.url}</a>
+                                            <br>
+                                            Amount: ${r.amount} ${r.currency}
+                                            <br>
+                                            Weightage: ${r.weight/100}%
+                                        </p>
+                                    </div>
+                                </div>
+                            `;
+                            }
+                        )
+                    })
+            }
+
+            fetchData();
+        }
+    </script>
+</body>
+
+</html>
