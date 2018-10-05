@@ -1,4 +1,5 @@
 var fs = require("fs");
+var path = require('path');
 var request = require("request");
 var steem = require('steem');
 var dsteem = require('dsteem');
@@ -55,7 +56,7 @@ function startup() {
       next();
     });
 
-    app.get('/', (req, res) => res.sendFile('index.html'))
+    app.get('/', (req, res) => res.sendFile(path.resolve('./index.html')));
 
     app.get('/api/bids', (req, res) => res.json({ current_round: outstanding_bids, last_round: last_round }));
     app.listen(port, () => utils.log('API running on port ' + port))

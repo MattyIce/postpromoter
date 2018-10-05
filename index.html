@@ -138,7 +138,22 @@
                     ).then(d => {
                         currentRound.innerHTML = '';
                         lastRound.innerHTML = '';
-                        console.log(d)
+                        d.current_round.map(
+                            r => {
+                                currentRound.innerHTML +=
+                                    `
+                                <div class="card">
+                                    <div class="card-content">
+                                        Sender: ${r.sender} <br>
+                                        Author: ${r.author} <br>
+                                        URL: <a href="${r.url}">${r.url}</a><br>
+                                        Amount: ${r.amount} <br>
+                                        Weightage: ${r.weight/100}%
+                                    </div>
+                                </div>
+                            `;
+                            }
+                        )
                         d.last_round.map(
                             r => {
                                 lastRound.innerHTML +=
