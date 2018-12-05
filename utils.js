@@ -95,14 +95,14 @@ var HOURS = 60 * 60;
      }
  }
 
- function getVoteValue(voteWeight, account, power) {
+ function getVoteValue(voteWeight, account, power, steem_price) {
      if (!account) {
          return;
      }
      if (rewardBalance && recentClaims && steemPrice && votePowerReserveRate) {
          var voteValue = getVoteRShares(voteWeight, account, power)
            * rewardBalance / recentClaims
-           * steemPrice;
+           * steem_price;
 
          return voteValue;
 
