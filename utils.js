@@ -195,6 +195,7 @@ function format(n, c, d, t) {
    updateSteemVariables: updateSteemVariables,
    getVotingPower: getVotingPower,
    getVoteValue: getVoteValue,
+   getVoteValueUSD: getVoteValueUSD,
    timeTilFullPower: timeTilFullPower,
    getVestingShares: getVestingShares,
 	 vestsToSP: vestsToSP,
