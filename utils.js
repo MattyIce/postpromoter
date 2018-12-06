@@ -13,6 +13,7 @@ var HOURS = 60 * 60;
  var totalVestingFund;
  var totalVestingShares;
  var steem_per_mvests;
+ var sbd_print_percentage;
 
  function updateSteemVariables(client) {
     client.database.call('get_reward_fund', ['post']).then(function (t) {
@@ -33,6 +34,7 @@ var HOURS = 60 * 60;
       totalVestingFund = parseFloat(t.total_vesting_fund_steem.replace(" STEEM", ""));
       totalVestingShares = parseFloat(t.total_vesting_shares.replace(" VESTS", ""));
       steem_per_mvests = ((totalVestingFund / totalVestingShares) * 1000000);
+      sbd_print_percentage = t.sbd_print_rate / 10000
     }, function (e) {
       log('Error loading global properties: ' + e);
     });
@@ -107,6 +109,14 @@ var HOURS = 60 * 60;
          return voteValue;
 
      }
+ }
+
+ function getVoteValueUSD(vote_value, sbd_price) {
+  let steempower_value = vote_value * 0.5
+  let sbd_print_percentage_half = (0.5 * sbd_print_percentage)
+  let sbd_value = vote_value * sbd_print_percentage_half
+  let steem_value = vote_value * (0.5 - sbd_print_percentage_half)
+  return (sbd_value * sbd_price) + steem_value + steempower_value
  }
 
 function timeTilFullPower(cur_power){
