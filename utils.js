@@ -112,10 +112,10 @@ var HOURS = 60 * 60;
  }
 
  function getVoteValueUSD(vote_value, sbd_price) {
-  let steempower_value = vote_value * 0.5
-  let sbd_print_percentage_half = (0.5 * sbd_print_percentage)
-  let sbd_value = vote_value * sbd_print_percentage_half
-  let steem_value = vote_value * (0.5 - sbd_print_percentage_half)
+  const steempower_value = vote_value * 0.5
+  const sbd_print_percentage_half = (0.5 * sbd_print_percentage)
+  const sbd_value = vote_value * sbd_print_percentage_half
+  const steem_value = vote_value * (0.5 - sbd_print_percentage_half)
   return (sbd_value * sbd_price) + steem_value + steempower_value
  }
 
