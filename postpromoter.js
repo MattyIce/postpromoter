@@ -198,10 +198,10 @@ function startVoting(bids) {
   utils.log('Bidding Round End! Starting to vote! Total bids: ' + bids.length + ' - $' + total + ' | ' + bids_sbd + ' SBD | ' + bids_steem + ' STEEM');
 
   var adjusted_weight = 1;
-
+  
   if(config.max_roi != null && config.max_roi != undefined && !isNaN(config.max_roi)) {
     var vote_value = utils.getVoteValue(100, account, 10000, steem_price);
-    var vote_value_usd = vote_value / 2 * sbd_price + vote_value / 2;
+    var vote_value_usd = utils.getVoteValueUSD(vote_value, sbd_price)
     //min_total_bids_value_usd: calculates the minimum value in USD that the total bids must have to represent a maximum ROI defined in config.json
     //'max_roi' in config.json = 10 represents a maximum ROI of 10%
     var min_total_bids_value_usd = vote_value_usd * 0.75 * ((100 - config.max_roi) / 100 );
@@ -470,7 +470,7 @@ function checkRoundFillLimit(round, amount, currency) {
     return false;
 
   var vote_value = utils.getVoteValue(100, account, 10000, steem_price);
-  var vote_value_usd = vote_value / 2 * sbd_price + vote_value / 2;
+  var vote_value_usd = utils.getVoteValueUSD(vote_value, sbd_price)
   var bid_value = round.reduce(function(t, b) { return t + b.amount * ((b.currency == 'SBD') ? sbd_price : steem_price) }, 0);
   var new_bid_value = amount * ((currency == 'SBD') ? sbd_price : steem_price);
 
