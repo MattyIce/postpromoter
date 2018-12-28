@@ -21,7 +21,7 @@ let use_delegators = false;
 let round_end_timeout = -1;
 let steem_price = 1;  // This will get overridden with actual prices if a price_feed_url is specified in settings
 let sbd_price = 1;    // This will get overridden with actual prices if a price_feed_url is specified in settings
-let version = '2.1.1';
+let version = '2.1.2';
 let client = null;
 let rpc_node = null;
 
