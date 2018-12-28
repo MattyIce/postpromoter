@@ -650,6 +650,11 @@ function checkPost(memo, amount, currency, sender) {
 			// Check if there is already a bid for this post in the current round
 			let existing_bid = round.find(bid => bid.url === memo);
 
+			//  Check if there is already a bid for this post in the next round
+            if (!existing_bid){
+              existing_bid = next_round.find(bid => bid.url === memo);
+            }
+
 			if(existing_bid) {
 				// There is already a bid for this post in the current round
 				utils.log('Existing Bid Found - New Amount: ' + amount + ', Total Amount: ' + (existing_bid.amount + amount));
