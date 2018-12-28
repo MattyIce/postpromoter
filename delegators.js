@@ -1,32 +1,32 @@
-const steem = require('steem');
-var utils = require('./utils');
-var dsteem = require('dsteem');
+//const steem = require('steem');
+let utils = require('./utils');
+//let dsteem = require('dsteem');
 
-var delegation_transactions = [];
+let delegation_transactions = [];
 
 function loadDelegations(client, account, callback) {
   getTransactions(client, account, -1, callback);
 }
 
 function getTransactions(client, account, start, callback) {
-  var last_trans = start;
+  let last_trans = start;
 	utils.log('Loading history for delegators at transaction: ' + (start < 0 ? 'latest' : start));
   
   client.database.call('get_account_history', [account, start, (start < 0) ? 10000 : Math.min(start, 10000)]).then(function (result) {
     result.reverse();
 
-		for(var i = 0; i < result.length; i++) {
-			var trans = result[i];
-      var op = trans[1].op;
+		for(let i = 0; i < result.length; i++) {
+			let trans = result[i];
+      let op = trans[1].op;
 
-      if(op[0] == 'delegate_vesting_shares' && op[1].delegatee == account)
+      if(op[0] === 'delegate_vesting_shares' && op[1].delegatee === account)
         delegation_transactions.push({ id: trans[0], data: op[1] });
 
       // Save the ID of the last transaction that was processed.
       last_trans = trans[0];
     }
 		
-    if(last_trans > 0 && last_trans != start)
+    if(last_trans > 0 && last_trans !== start)
       getTransactions(client, account, last_trans, callback);
     else {
 			if(last_trans > 0) {
@@ -40,16 +40,16 @@ function getTransactions(client, account, start, callback) {
 }
 
 function processDelegations(callback) {
-  var delegations = [];
+  let delegations = [];
 
   // Go through the delegation transactions from oldest to newest to find the final delegated amount from each account
   delegation_transactions.reverse();
 
-  for(var i = 0; i < delegation_transactions.length; i++) {
-    var trans = delegation_transactions[i];
+  for(let i = 0; i < delegation_transactions.length; i++) {
+    let trans = delegation_transactions[i];
 
     // Check if this is a new delegation or an update to an existing delegation from this account
-    var delegation = delegations.find(d => d.delegator == trans.data.delegator);
+    let delegation = delegations.find(d => d.delegator === trans.data.delegator);
 
     if(delegation) {
       delegation.vesting_shares = trans.data.vesting_shares;
@@ -67,4 +67,4 @@ function processDelegations(callback) {
 
 module.exports = {
   loadDelegations: loadDelegations
-}
+};
