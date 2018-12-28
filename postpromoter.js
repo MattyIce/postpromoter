@@ -3,7 +3,7 @@ const request = require("request");
 const steem = require('steem');
 const dsteem = require('dsteem');
 const utils = require('./utils');
-let express = require('express');
+const express = require('express');
 
 let account = null;
 let transactions = [];
@@ -478,6 +478,7 @@ function checkRoundFillLimit(round, amount, currency) {
 }
 
 function validatePost(author, permlink, isVoting, callback, retries) {
+  const memo = '@' + author + '/' + permlink;
   client.database.call('get_content', [author, permlink]).then(function (result) {
     if (result && result.id > 0) {
 
@@ -865,7 +866,7 @@ function refund(sender, amount, currency, reason, retries, data) {
   memo = memo.replace(/{max_age}/g, days + ' Day(s)' + ((hours > 0) ? ' ' + hours + ' Hour(s)' : ''));
 
   // Issue the refund.
-  client.broadcast.transfer({ amount: utils.format(amount, 3) + ' ' + currency, from: config.account, to: sender, memo: memo }, dsteem.PrivateKey.fromString(config['active_key'])).then(function(response) {
+  client.broadcast.transfer({ amount: utils.format(amount, 3) + ' ' + currency, from: config.account, to: sender, memo: memo }, dsteem.PrivateKey.fromString(config['active_key'])).then(function() {
     utils.log('Refund of ' + amount + ' ' + currency + ' sent to @' + sender + ' for reason: ' + reason);
   }, function(err) {
     logError('Error sending refund to @' + sender + ' for: ' + amount + ' ' + currency + ', Error: ' + err);
@@ -900,7 +901,7 @@ function claimRewards() {
         if(parseFloat(account.reward_sbd_balance) > 0 && config['post_rewards_withdrawal_account'] && config['post_rewards_withdrawal_account'] !== '') {
 
           // Send liquid post rewards to the specified account
-          client.broadcast.transfer({ amount: account.reward_sbd_balance, from: config.account, to: config['post_rewards_withdrawal_account'], memo: 'Liquid Post Rewards Withdrawal' }, dsteem.PrivateKey.fromString(config['active_key'])).then(function(response) {
+          client.broadcast.transfer({ amount: account.reward_sbd_balance, from: config.account, to: config['post_rewards_withdrawal_account'], memo: 'Liquid Post Rewards Withdrawal' }, dsteem.PrivateKey.fromString(config['active_key'])).then(function() {
             utils.log('$$$ Auto withdrawal - liquid post rewards: ' + account.reward_sbd_balance + ' sent to @' + config['post_rewards_withdrawal_account']);
           }, function(err) { utils.log('Error transfering liquid SBD post rewards: ' + err); });
         }
@@ -909,7 +910,7 @@ function claimRewards() {
         if(parseFloat(account.reward_steem_balance) > 0 && config['post_rewards_withdrawal_account'] && config['post_rewards_withdrawal_account'] !== '') {
 
           // Send liquid post rewards to the specified account
-          client.broadcast.transfer({ amount: account.reward_steem_balance, from: config.account, to: config['post_rewards_withdrawal_account'], memo: 'Liquid Post Rewards Withdrawal' }, dsteem.PrivateKey.fromString(config['active_key'])).then(function(response) {
+          client.broadcast.transfer({ amount: account.reward_steem_balance, from: config.account, to: config['post_rewards_withdrawal_account'], memo: 'Liquid Post Rewards Withdrawal' }, dsteem.PrivateKey.fromString(config['active_key'])).then(function() {
             utils.log('$$$ Auto withdrawal - liquid post rewards: ' + account.reward_steem_balance + ' sent to @' + config['post_rewards_withdrawal_account']);
           }, function(err) { utils.log('Error transfering liquid STEEM post rewards: ' + err); });
         }
@@ -1117,7 +1118,7 @@ function sendWithdrawal(withdrawal, retries, callback) {
     memo = steem.memo.encode(config.memo_key, withdrawal.memo_key, memo);
 
   // Send the withdrawal amount to the specified account
-  client.broadcast.transfer({ amount: formatted_amount, from: config.account, to: withdrawal.to, memo: memo }, dsteem.PrivateKey.fromString(config['active_key'])).then(function(response) {
+  client.broadcast.transfer({ amount: formatted_amount, from: config.account, to: withdrawal.to, memo: memo }, dsteem.PrivateKey.fromString(config['active_key'])).then(function() {
     utils.log('$$$ Auto withdrawal: ' + formatted_amount + ' sent to @' + withdrawal.to);
 
     if(callback)
