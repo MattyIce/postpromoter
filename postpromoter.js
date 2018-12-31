@@ -1110,8 +1110,8 @@ function sendWithdrawal(withdrawal, retries, callback) {
     return;
   }
 
-  let formatted_amount = utils.format(withdrawal.amount, 3).replace('/,/g', '') + ' ' + withdrawal.currency;
-  let memo = config['auto_withdrawal'].memo.replace('/\{balance\}/g', formatted_amount);
+  let formatted_amount = utils.format(withdrawal.amount, 3).replace(/,/g, '') + ' ' + withdrawal.currency;
+  let memo = config['auto_withdrawal'].memo.replace(/\{balance\}/g, formatted_amount);
 
   // Encrypt memo
   if (memo.startsWith('#') && config.memo_key && config.memo_key !== '')
