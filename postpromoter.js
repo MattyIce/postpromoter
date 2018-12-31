@@ -294,10 +294,10 @@ function sendComment(bid) {
   if (content && content !== '') {
 
     // Generate the comment permlink via steemit standard convention
-    let permlink = 're-' + bid.author.replace('/\./g', '') + '-' + bid.permlink + '-' + new Date().toISOString().replace('/-|:|\./g', '').toLowerCase();
+    let permlink = 're-' + bid.author.replace(/\./g, '') + '-' + bid.permlink + '-' + new Date().toISOString().replace(/-|:|\./g, '').toLowerCase();
 
     // Replace variables in the promotion content
-    content = content.replace('/\{weight\}/g', utils.format(bid.weight / 100)).replace('/\{botname\}/g', config.account).replace('/\{sender\}/g', bid.sender);
+    content = content.replace(/\{weight\}/g, utils.format(bid.weight / 100)).replace(/\{botname\}/g, config.account).replace(/\{sender\}/g, bid.sender);
 
     let comment = {
       author: account.name, 
