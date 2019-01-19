@@ -965,7 +965,7 @@ function processWithdrawals() {
         }
 
         // Get the total amount delegated by all delegators
-        var total_vests = delegators.reduce(function (total, v) { return total + parseFloat(v.vesting_shares); }, 0);
+        var total_vests = delegators.length;
 
         // Send the withdrawal to each delegator based on their delegation amount
         for(var j = 0; j < delegators.length; j++) {
@@ -985,12 +985,12 @@ function processWithdrawals() {
             var withdrawal = withdrawals.find(w => w.to == to_account && w.currency == 'SBD');
 
             if(withdrawal) {
-              withdrawal.amount += parseFloat(account.sbd_balance) * (withdrawal_account.stake / total_stake) * (parseFloat(delegator.vesting_shares) / total_vests) - 0.001;
+              withdrawal.amount += (parseFloat(account.sbd_balance) / total_vests) - 0.001;
             } else {
               withdrawals.push({
                 to: to_account,
                 currency: 'SBD',
-                amount: parseFloat(account.sbd_balance) * (withdrawal_account.stake / total_stake) * (parseFloat(delegator.vesting_shares) / total_vests) - 0.001
+                amount: (parseFloat(account.sbd_balance) / total_vests) - 0.001
               });
             }
           }
@@ -1000,12 +1000,12 @@ function processWithdrawals() {
             var withdrawal = withdrawals.find(w => w.to == to_account && w.currency == 'STEEM');
 
             if(withdrawal) {
-              withdrawal.amount += parseFloat(account.balance) * (withdrawal_account.stake / total_stake) * (parseFloat(delegator.vesting_shares) / total_vests) - 0.001;
+              withdrawal.amount += (parseFloat(account.balance) / total_vests) - 0.001;
             } else {
               withdrawals.push({
                 to: to_account,
                 currency: 'STEEM',
-                amount: parseFloat(account.balance) * (withdrawal_account.stake / total_stake) * (parseFloat(delegator.vesting_shares) / total_vests) - 0.001
+                amount: (parseFloat(account.balance) / total_vests) - 0.001
               });
             }
           }
