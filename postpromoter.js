@@ -128,7 +128,7 @@ function startProcess() {
     account = result[0];
 
     if (account && !isVoting) {
-			var vp = utils.getVPHF20(account);
+			var vp = utils.getVotingPower(account);
 
       if(config.detailed_logging) {
         var bids_steem = utils.format(outstanding_bids.reduce(function(t, b) { return t + ((b.currency == 'STEEM') ? b.amount : 0); }, 0), 3);
@@ -507,7 +507,7 @@ function validatePost(author, permlink, isVoting, callback, retries) {
         }
 
         var created = new Date(result.created + 'Z');
-        var time_until_vote = isVoting ? 0 : utils.timeTilFullPower(utils.getVPHF20(account));
+        var time_until_vote = isVoting ? 0 : utils.timeTilFullPower(utils.getVotingPower(account));
 
         // Get the list of votes on this post to make sure the bot didn't already vote on it (you'd be surprised how often people double-submit!)
         var votes = result.active_votes.filter(function(vote) { return vote.voter == account.name; });
