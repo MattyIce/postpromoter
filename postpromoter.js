@@ -551,13 +551,13 @@ function validatePost(author, permlink, isVoting, callback, retries) {
       return;
     }
   }, function(err) {
-      logError('Error loading post: ' + memo + ', Error: ' + err);
+      logError('Error loading post: ' + permlink + ', Error: ' + err);
 
       // Try again on error
       if(retries < 2)
         setTimeout(function() { validatePost(author, permlink, isVoting, callback, retries + 1); }, 3000);
       else {
-        utils.log('============= Validate post failed three times for: ' + memo + ' ===============');
+        utils.log('============= Validate post failed three times for: ' + permlink + ' ===============');
         
         if(callback)
           callback('invalid_post_url');
