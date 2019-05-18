@@ -191,6 +191,15 @@ function format(n, c, d, t) {
 
  function log(msg) { console.log(new Date().toString() + ' - ' + msg); }
 
+function tryParse(json) {
+	try {
+		return JSON.parse(json);
+	} catch(err) {
+		log('Error trying to parse JSON: ' + json, 3, 'Red');
+		return null;
+	}
+}
+
  module.exports = {
    updateSteemVariables: updateSteemVariables,
    getVotingPower: getVotingPower,
@@ -204,5 +213,6 @@ function format(n, c, d, t) {
    format: format,
    toTimer: toTimer,
 	 log: log,
-	 getVPHF20: getVPHF20
+	 getVPHF20: getVPHF20,
+	 tryParse: tryParse
  }

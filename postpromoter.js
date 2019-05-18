@@ -3,6 +3,7 @@ var request = require("request");
 var steem = require('steem');
 var dsteem = require('dsteem');
 var utils = require('./utils');
+const SSC = require('sscjs');
 
 var account = null;
 var transactions = [];
@@ -23,10 +24,12 @@ var sbd_price = 1;    // This will get overridden with actual prices if a price_
 var version = '2.1.1';
 var client = null;
 var rpc_node = null;
+var ssc = null;
+var last_se_block = 0;
 
 startup();
 
-function startup() {
+async function startup() {
   // Load the settings from the config file
   loadConfig();
 
@@ -35,7 +38,9 @@ function startup() {
   client = new dsteem.Client(rpc_node);
 
   utils.log("* START - Version: " + version + " *");
-  utils.log("Connected to: " + rpc_node);
+	utils.log("Connected to: " + rpc_node);
+	
+	ssc = new SSC(config.se_rpc_url);
 
   if(config.backup_mode)
     utils.log('*** RUNNING IN BACKUP MODE ***');
@@ -76,7 +81,10 @@ function startup() {
       next_round = state.next_round;
 
     if(state.last_withdrawal)
-      last_withdrawal = state.last_withdrawal;
+			last_withdrawal = state.last_withdrawal;
+			
+		if(state.last_se_block)
+			last_se_block = state.last_se_block;
 
 		// Removed this for now since api.steemit.com is not returning more than 30 days of account history!
     //if(state.version != version)
@@ -109,22 +117,104 @@ function startup() {
         saveDelegators();
       });
     }
-  }
+	}
+	
+	await startProcess();
 
   // Schedule to run every 10 seconds
   setInterval(startProcess, 10000);
 
   // Load updated STEEM and SBD prices every 30 minutes
   loadPrices();
-  setInterval(loadPrices, 30 * 60 * 1000);
+	setInterval(loadPrices, 30 * 60 * 1000);
+	
+	if(last_se_block > 0)
+		ssc.streamFromTo(last_se_block + 1, null, processSEBlock);
+	else
+		ssc.stream(processSEBlock);
 }
 
-function startProcess() {
+async function processSEBlock(err, block) {
+	if(err)
+		utils.log('Error processing block: ' + err);
+
+	if(!block)
+		return;
+	
+	utils.log('Processing block [' + block.blockNumber + ']...', block.blockNumber % 100 == 0 ? 1 : 4);
+
+	try {
+		for(var i = 0; i < block.transactions.length; i++)
+			await processSETransaction(block.transactions[i]);
+	} catch(err) { utils.log('Error processing block: ' + block.blockNumber + ', Error: ' + err.message); }
+
+	last_se_block = block.blockNumber;
+	saveState();
+}
+
+async function processSETransaction(tx) {
+	if(tx.contract == 'tokens' && tx.action == 'transfer') {
+		var payload = utils.tryParse(tx.payload);
+
+		if(!payload)
+			return;
+
+		if(payload.to != config.account)
+			return;
+
+		var currency = payload.symbol;
+		var token = config.tokens.find(t => t.symbol == currency);
+
+		if(!token)
+			return;
+
+		var logs = utils.tryParse(tx.logs);
+
+		var success = logs && !logs.errors && logs.events && logs.events.length > 0;
+	
+		if(success) {
+			var event_data = logs.events[0].data;
+			var amount = parseFloat(event_data.quantity);
+			utils.log("Incoming Bid! From: " + event_data.from + ", Amount: " + amount + ", memo: " + payload.memo);
+
+			// Check for min and max bid values in configuration settings
+			var min_bid = config.min_bid ? parseFloat(config.min_bid) : 0;
+			var max_bid = config.max_bid ? parseFloat(config.max_bid) : 9999;
+			var max_bid_whitelist = config.max_bid_whitelist ? parseFloat(config.max_bid_whitelist) : 9999;
+
+			if(config.disabled_mode) {
+				// Bot is disabled, refund all Bids
+				refund(event_data.from, amount, currency, 'bot_disabled');
+			} else if(amount < min_bid) {
+				// Bid amount is too low (make sure it's above the min_refund_amount setting)
+				if(!config.min_refund_amount || amount >= config.min_refund_amount)
+					refund(event_data.from, amount, currency, 'below_min_bid');
+				else {
+					utils.log('Invalid bid - below min bid amount and too small to refund.');
+				}
+			} else if (amount > max_bid && whitelist.indexOf(event_data.from) < 0) {
+				// Bid amount is too high
+				refund(event_data.from, amount, currency, 'above_max_bid');
+			} else if (amount > max_bid_whitelist) {
+				// Bid amount is too high even for whitelisted users!
+				refund(event_data.from, amount, currency, 'above_max_bid_whitelist');
+			} else if(config.currencies_accepted && config.currencies_accepted.indexOf(currency) < 0) {
+				// Sent an unsupported currency
+				refund(event_data.from, amount, currency, 'invalid_currency');
+			} else {
+				// Bid amount is just right!
+				checkPost(payload.memo, amount, currency, event_data.from, 0);
+			}	
+		}
+	}
+}
+
+async function startProcess() {
   // Load the settings from the config file each time so we can pick up any changes
   loadConfig();
 
   // Load the bot account info
-  client.database.getAccounts([config.account]).then(function (result) {
+  await client.database.getAccounts([config.account]).then(function (result) {
     account = result[0];
 
     if (account && !isVoting) {
@@ -166,7 +256,7 @@ function startProcess() {
       }
 
       // Load transactions to the bot account
-      getTransactions(saveState);
+      //getTransactions(saveState);
       
       // Check if there are any rewards to claim.
       claimRewards();
@@ -392,40 +482,7 @@ function getTransactions(callback) {
           utils.log('Processing Transaction: ' + JSON.stringify(trans));
 
         // We only care about transfers to the bot
-        if (op[0] == 'transfer' && op[1].to == config.account) {
-          var amount = parseFloat(op[1].amount);
-          var currency = utils.getCurrency(op[1].amount);
-          utils.log("Incoming Bid! From: " + op[1].from + ", Amount: " + op[1].amount + ", memo: " + op[1].memo);
-
-          // Check for min and max bid values in configuration settings
-          var min_bid = config.min_bid ? parseFloat(config.min_bid) : 0;
-          var max_bid = config.max_bid ? parseFloat(config.max_bid) : 9999;
-          var max_bid_whitelist = config.max_bid_whitelist ? parseFloat(config.max_bid_whitelist) : 9999;
-
-          if(config.disabled_mode) {
-            // Bot is disabled, refund all Bids
-            refund(op[1].from, amount, currency, 'bot_disabled');
-          } else if(amount < min_bid) {
-            // Bid amount is too low (make sure it's above the min_refund_amount setting)
-            if(!config.min_refund_amount || amount >= config.min_refund_amount)
-              refund(op[1].from, amount, currency, 'below_min_bid');
-            else {
-              utils.log('Invalid bid - below min bid amount and too small to refund.');
-            }
-          } else if (amount > max_bid && whitelist.indexOf(op[1].from) < 0) {
-            // Bid amount is too high
-            refund(op[1].from, amount, currency, 'above_max_bid');
-          } else if (amount > max_bid_whitelist) {
-            // Bid amount is too high even for whitelisted users!
-            refund(op[1].from, amount, currency, 'above_max_bid_whitelist');
-          } else if(config.currencies_accepted && config.currencies_accepted.indexOf(currency) < 0) {
-            // Sent an unsupported currency
-            refund(op[1].from, amount, currency, 'invalid_currency');
-          } else {
-            // Bid amount is just right!
-            checkPost(op[1].memo, amount, currency, op[1].from, 0);
-          }
-        } else if(use_delegators && op[0] == 'delegate_vesting_shares' && op[1].delegatee == account.name) {
+        if(use_delegators && op[0] == 'delegate_vesting_shares' && op[1].delegatee == account.name) {
           // If we are paying out to delegators, then update the list of delegators when new delegation transactions come in
           var delegator = delegators.find(d => d.delegator == op[1].delegator);
 
@@ -786,7 +843,8 @@ function saveState() {
     last_round: last_round,
     next_round: next_round,
     transactions: transactions,
-    last_withdrawal: last_withdrawal,
+		last_withdrawal: last_withdrawal,
+		last_se_block: last_se_block,
     version: version
   };
 
@@ -861,18 +919,56 @@ function refund(sender, amount, currency, reason, retries, data) {
   var hours = (config.max_post_age % 24);
   memo = memo.replace(/{max_age}/g, days + ' Day(s)' + ((hours > 0) ? ' ' + hours + ' Hour(s)' : ''));
 
-  // Issue the refund.
-  client.broadcast.transfer({ amount: utils.format(amount, 3) + ' ' + currency, from: config.account, to: sender, memo: memo }, dsteem.PrivateKey.fromString(config.active_key)).then(function(response) {
-    utils.log('Refund of ' + amount + ' ' + currency + ' sent to @' + sender + ' for reason: ' + reason);
-  }, function(err) {
-    logError('Error sending refund to @' + sender + ' for: ' + amount + ' ' + currency + ', Error: ' + err);
+	if(['SBD', 'STEEM'].includes(currency)) {
+		// Issue the refund.
+		client.broadcast.transfer({ amount: utils.format(amount, 3) + ' ' + currency, from: config.account, to: sender, memo: memo }, dsteem.PrivateKey.fromString(config.active_key)).then(function(response) {
+			utils.log('Refund of ' + amount + ' ' + currency + ' sent to @' + sender + ' for reason: ' + reason);
+		}, function(err) {
+			logError('Error sending refund to @' + sender + ' for: ' + amount + ' ' + currency + ', Error: ' + err);
 
-    // Try again on error
-    if(retries < 2)
-      setTimeout(function() { refund(sender, amount, currency, reason, retries + 1, data) }, (Math.floor(Math.random() * 10) + 3) * 1000);
-    else
-      utils.log('============= Refund failed three times for: @' + sender + ' ===============');
-  });
+			// Try again on error
+			if(retries < 2)
+				setTimeout(function() { refund(sender, amount, currency, reason, retries + 1, data) }, (Math.floor(Math.random() * 10) + 3) * 1000);
+			else
+				utils.log('============= Refund failed three times for: @' + sender + ' ===============');
+		});
+	} else
+		steemEnginePayment(sender, amount, currency, reason, 0);
+}
+
+async function steemEnginePayment(to, amount, currency, memo, retries) {
+	var transaction_data = {
+		"contractName": "tokens",
+		"contractAction": "transfer",
+		"contractPayload": {
+			"symbol": currency,
+			"to": to,
+			"quantity": amount + '',
+			"memo": memo
+		}
+	};
+
+	return await client.broadcast.json({ id: config.se_chain_id, json: JSON.stringify(transaction_data), required_auths: [config.account], required_posting_auths: [] }, dsteem.PrivateKey.fromString(config.active_key))
+		.then(response => {
+			utils.log('Payment of ' + amount.toFixed(3) + ' ' + currency + ' sent to @' + to + ' for reason: ' + memo);
+			return response;
+		})
+		.catch(async err => {
+			utils.log('***** Error sending payment of ' + amount.toFixed(3) + ' ' + currency + ' sent to @' + to + ' for reason: ' + memo + ', Error: ' + JSON.stringify(err));
+
+			// Try again one time on error
+			if (retries < 2)
+				return await utils.timeout(3000).then(async function() { return await steemEnginePayment(to, amount, currency, memo, retries + 1); });
+			else {
+				utils.log('');
+				utils.log('============= Payment transaction failed three times! ===============');
+				utils.log('Failed payment of ' + amount.toFixed(3) + ' ' + currency + ' sent to @' + to + ' for reason: ' + memo);
+				utils.log('=====================================================================');
+				utils.log('');
+				
+				return null;
+			}
+		});
 }
 
 function claimRewards() {
@@ -1193,7 +1289,16 @@ function loadPrices() {
   }
 }
 
-function getUsdValue(bid) { return bid.amount * ((bid.currency == 'SBD') ? sbd_price : steem_price); }
+function getUsdValue(bid) { 
+	if(['SBD', 'STEEM'].includes(bid.currency))
+		return bid.amount * ((bid.currency == 'SBD') ? sbd_price : steem_price); 
+	else {
+		var token = config.tokens.find(t => t.symbol == bid.currency);
+
+		// If no value exists just return a default 1 cent value???
+		return token ? bid.amount * token.usd_value : 0.01;	
+	}
+}
 
 function logFailedBid(bid, message) {
   try {
