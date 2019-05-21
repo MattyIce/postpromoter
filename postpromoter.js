@@ -26,6 +26,7 @@ var client = null;
 var rpc_node = null;
 var ssc = null;
 var last_se_block = 0;
+var earnings = {};
 
 startup();
 
@@ -85,6 +86,9 @@ async function startup() {
 			
 		if(state.last_se_block)
 			last_se_block = state.last_se_block;
+
+		if(state.earnings)
+			earnings = state.earnings;
 
 		// Removed this for now since api.steemit.com is not returning more than 30 days of account history!
     //if(state.version != version)
@@ -256,7 +260,8 @@ async function startProcess() {
       }
 
       // Load transactions to the bot account
-      //getTransactions(saveState);
+			//getTransactions(saveState);
+			saveState();
       
       // Check if there are any rewards to claim.
       claimRewards();
@@ -730,12 +735,25 @@ function checkPost(memo, amount, currency, sender, retries) {
 				// Check that the new total doesn't exceed the max bid amount per post
 				if (new_amount > max_bid)
 					refund(sender, amount, currency, 'above_max_bid');
-				else
+				else {
 					existing_bid.amount = new_amount;
+
+					// Update the bot's earnings for this currency
+					if(earnings[currency])
+						earnings[currency] += amount;
+					else
+						earnings[currency] = amount;
+				}
 			} else {
 				// All good - push to the array of valid bids for this round
 				utils.log('Valid Bid - Amount: ' + amount + ' ' + currency + ', Url: ' + memo);
 				round.push({ amount: amount, currency: currency, sender: sender, author: author, permlink: permLink, url: memo });
+
+				// Update the bot's earnings for this currency
+				if(earnings[currency])
+					earnings[currency] += amount;
+				else
+					earnings[currency] = amount;
 
 				// If this bid is through an affiliate service, send the fee payout
 				if(affiliate) {
@@ -845,6 +863,7 @@ function saveState() {
     transactions: transactions,
 		last_withdrawal: last_withdrawal,
 		last_se_block: last_se_block,
+		earnings: earnings,
     version: version
   };
 
@@ -950,11 +969,11 @@ async function steemEnginePayment(to, amount, currency, memo, retries) {
 
 	return await client.broadcast.json({ id: config.se_chain_id, json: JSON.stringify(transaction_data), required_auths: [config.account], required_posting_auths: [] }, dsteem.PrivateKey.fromString(config.active_key))
 		.then(response => {
-			utils.log('Payment of ' + amount.toFixed(3) + ' ' + currency + ' sent to @' + to + ' for reason: ' + memo);
+			utils.log('Payment of ' + parseFloat(amount).toFixed(3) + ' ' + currency + ' sent to @' + to + ' for reason: ' + memo);
 			return response;
 		})
 		.catch(async err => {
-			utils.log('***** Error sending payment of ' + amount.toFixed(3) + ' ' + currency + ' sent to @' + to + ' for reason: ' + memo + ', Error: ' + JSON.stringify(err));
+			utils.log('***** Error sending payment of ' + parseFloat(amount).toFixed(3) + ' ' + currency + ' sent to @' + to + ' for reason: ' + memo + ', Error: ' + JSON.stringify(err));
 
 			// Try again one time on error
 			if (retries < 2)
@@ -962,7 +981,7 @@ async function steemEnginePayment(to, amount, currency, memo, retries) {
 			else {
 				utils.log('');
 				utils.log('============= Payment transaction failed three times! ===============');
-				utils.log('Failed payment of ' + amount.toFixed(3) + ' ' + currency + ' sent to @' + to + ' for reason: ' + memo);
+				utils.log('Failed payment of ' + parseFloat(amount).toFixed(3) + ' ' + currency + ' sent to @' + to + ' for reason: ' + memo);
 				utils.log('=====================================================================');
 				utils.log('');
 				
@@ -1026,147 +1045,114 @@ function processWithdrawals() {
   if(config.backup_mode)
     return;
 
-  var has_sbd = config.currencies_accepted.indexOf('SBD') >= 0 && parseFloat(account.sbd_balance) > 0;
-  var has_steem = config.currencies_accepted.indexOf('STEEM') >= 0 && parseFloat(account.balance) > 0;
+	// Save the date of the last withdrawal
+	last_withdrawal = new Date().toDateString();
 
-  if (has_sbd || has_steem) {
+	var total_stake = config.auto_withdrawal.accounts.reduce(function (total, info) { return total + info.stake; }, 0);
 
-    // Save the date of the last withdrawal
-    last_withdrawal = new Date().toDateString();
+	var withdrawals = [];
 
-    var total_stake = config.auto_withdrawal.accounts.reduce(function (total, info) { return total + info.stake; }, 0);
+	for(var i = 0; i < config.auto_withdrawal.accounts.length; i++) {
+		var withdrawal_account = config.auto_withdrawal.accounts[i];
 
-    var withdrawals = [];
+		// If this is the special $delegators account, split it between all delegators to the bot
+		if(withdrawal_account.name == '$delegators') {
+			// Check if/where we should send payout for SP in the bot account directly
+			if(withdrawal_account.overrides) {
+				var bot_override = withdrawal_account.overrides.find(o => o.name == config.account);
 
-    for(var i = 0; i < config.auto_withdrawal.accounts.length; i++) {
-      var withdrawal_account = config.auto_withdrawal.accounts[i];
+				if(bot_override && bot_override.beneficiary) {
+					var bot_delegator = delegators.find(d => d.delegator == config.account);
 
-      // If this is the special $delegators account, split it between all delegators to the bot
-      if(withdrawal_account.name == '$delegators') {
-        // Check if/where we should send payout for SP in the bot account directly
-        if(withdrawal_account.overrides) {
-          var bot_override = withdrawal_account.overrides.find(o => o.name == config.account);
+					// Calculate the amount of SP in the bot account and add/update it in the list of delegators
+					var bot_vesting_shares = (parseFloat(account.vesting_shares) - parseFloat(account.delegated_vesting_shares)).toFixed(6) + ' VESTS';
 
-          if(bot_override && bot_override.beneficiary) {
-            var bot_delegator = delegators.find(d => d.delegator == config.account);
+					if(bot_delegator)
+						bot_delegator.vesting_shares = bot_vesting_shares;
+					else
+						delegators.push({ delegator: config.account, vesting_shares: bot_vesting_shares });
+				}
+			}
 
-            // Calculate the amount of SP in the bot account and add/update it in the list of delegators
-            var bot_vesting_shares = (parseFloat(account.vesting_shares) - parseFloat(account.delegated_vesting_shares)).toFixed(6) + ' VESTS';
+			// Get the total amount delegated by all delegators
+			var total_vests = delegators.reduce(function (total, v) { return total + parseFloat(v.vesting_shares); }, 0);
 
-            if(bot_delegator)
-              bot_delegator.vesting_shares = bot_vesting_shares;
-            else
-              delegators.push({ delegator: config.account, vesting_shares: bot_vesting_shares });
-          }
-        }
+			// Send the withdrawal to each delegator based on their delegation amount
+			for(var j = 0; j < delegators.length; j++) {
+				var delegator = delegators[j];
+				var to_account = delegator.delegator;
 
-        // Get the total amount delegated by all delegators
-        var total_vests = delegators.reduce(function (total, v) { return total + parseFloat(v.vesting_shares); }, 0);
+				// Check if this delegator has an override and if so send the payment to the beneficiary instead
+				if(withdrawal_account.overrides) {
+					var override = withdrawal_account.overrides.find(o => o.name == to_account);
 
-        // Send the withdrawal to each delegator based on their delegation amount
-        for(var j = 0; j < delegators.length; j++) {
-          var delegator = delegators[j];
-          var to_account = delegator.delegator;
+					if(override && override.beneficiary)
+						to_account = override.beneficiary;
+				}
 
-          // Check if this delegator has an override and if so send the payment to the beneficiary instead
-          if(withdrawal_account.overrides) {
-            var override = withdrawal_account.overrides.find(o => o.name == to_account);
+				Object.keys(earnings).filter(e => earnings[e] > 0).forEach(currency => {
+					// Check if there is already a withdrawal to this account for this currency
+					var withdrawal = withdrawals.find(w => w.to == to_account && w.currency == currency);
 
-            if(override && override.beneficiary)
-              to_account = override.beneficiary;
-          }
+					if(withdrawal) {
+						withdrawal.amount += parseFloat(earnings[currency]) * (withdrawal_account.stake / total_stake) * (parseFloat(delegator.vesting_shares) / total_vests) - 0.001;
+					} else {
+						withdrawals.push({
+							to: to_account,
+							currency: currency,
+							amount: parseFloat(earnings[currency]) * (withdrawal_account.stake / total_stake) * (parseFloat(delegator.vesting_shares) / total_vests) - 0.001
+						});
+					}
+				});
+			}
+		} else {
+			Object.keys(earnings).filter(e => earnings[e] > 0).forEach(currency => {
+				// Check if there is already a withdrawal to this account for this currency
+				var withdrawal = withdrawals.find(w => w.to == withdrawal_account.name && w.currency == currency);
 
-          if(has_sbd) {
-            // Check if there is already an SBD withdrawal to this account
-            var withdrawal = withdrawals.find(w => w.to == to_account && w.currency == 'SBD');
+				if(withdrawal) {
+					withdrawal.amount += parseFloat(earnings[currency]) * withdrawal_account.stake / total_stake - 0.001;
+				} else {
+					withdrawals.push({
+						to: withdrawal_account.name,
+						currency: currency,
+						amount: parseFloat(earnings[currency]) * withdrawal_account.stake / total_stake - 0.001
+					});
+				}
+			});
+		}
+	}
 
-            if(withdrawal) {
-              withdrawal.amount += parseFloat(account.sbd_balance) * (withdrawal_account.stake / total_stake) * (parseFloat(delegator.vesting_shares) / total_vests) - 0.001;
-            } else {
-              withdrawals.push({
-                to: to_account,
-                currency: 'SBD',
-                amount: parseFloat(account.sbd_balance) * (withdrawal_account.stake / total_stake) * (parseFloat(delegator.vesting_shares) / total_vests) - 0.001
-              });
-            }
-          }
+	if(withdrawals.length == 0)
+		return;
 
-          if(has_steem) {
-            // Check if there is already a STEEM withdrawal to this account
-            var withdrawal = withdrawals.find(w => w.to == to_account && w.currency == 'STEEM');
+	// Check if the memo should be encrypted
+	var encrypt = (config.auto_withdrawal.memo.startsWith('#') && config.memo_key && config.memo_key != '');
 
-            if(withdrawal) {
-              withdrawal.amount += parseFloat(account.balance) * (withdrawal_account.stake / total_stake) * (parseFloat(delegator.vesting_shares) / total_vests) - 0.001;
-            } else {
-              withdrawals.push({
-                to: to_account,
-                currency: 'STEEM',
-                amount: parseFloat(account.balance) * (withdrawal_account.stake / total_stake) * (parseFloat(delegator.vesting_shares) / total_vests) - 0.001
-              });
-            }
-          }
-        }
-      } else {
-        if(has_sbd) {
-          // Check if there is already an SBD withdrawal to this account
-          var withdrawal = withdrawals.find(w => w.to == withdrawal_account.name && w.currency == 'SBD');
+	if(encrypt) {
+		// Get list of unique withdrawal account names
+		var account_names = withdrawals.map(w => w.to).filter((v, i, s) => s.indexOf(v) === i);
 
-          if(withdrawal) {
-            withdrawal.amount += parseFloat(account.sbd_balance) * withdrawal_account.stake / total_stake - 0.001;
-          } else {
-            withdrawals.push({
-              to: withdrawal_account.name,
-              currency: 'SBD',
-              amount: parseFloat(account.sbd_balance) * withdrawal_account.stake / total_stake - 0.001
-            });
-          }
-        }
+		// Load account info to get memo keys for encryption
+		client.database.getAccounts(account_names).then(function (result) {
+			if (result) {
+				for(var i = 0; i < result.length; i++) {
+					var withdrawal_account = result[i];
+					var matches = withdrawals.filter(w => w.to == withdrawal_account.name);
 
-        if(has_steem) {
-          // Check if there is already a STEEM withdrawal to this account
-          var withdrawal = withdrawals.find(w => w.to == withdrawal_account.name && w.currency == 'STEEM');
+					for(var j = 0; j < matches.length; j++) {
+						matches[j].memo_key = withdrawal_account.memo_key;
+					}
+				}
 
-          if(withdrawal) {
-            withdrawal.amount += parseFloat(account.balance) * withdrawal_account.stake / total_stake - 0.001;
-          } else {
-            withdrawals.push({
-              to: withdrawal_account.name,
-              currency: 'STEEM',
-              amount: parseFloat(account.balance) * withdrawal_account.stake / total_stake - 0.001
-            });
-          }
-        }
-      }
-    }
-
-    // Check if the memo should be encrypted
-    var encrypt = (config.auto_withdrawal.memo.startsWith('#') && config.memo_key && config.memo_key != '');
-
-    if(encrypt) {
-      // Get list of unique withdrawal account names
-      var account_names = withdrawals.map(w => w.to).filter((v, i, s) => s.indexOf(v) === i);
-
-      // Load account info to get memo keys for encryption
-      client.database.getAccounts(account_names).then(function (result) {
-        if (result) {
-          for(var i = 0; i < result.length; i++) {
-            var withdrawal_account = result[i];
-            var matches = withdrawals.filter(w => w.to == withdrawal_account.name);
-
-            for(var j = 0; j < matches.length; j++) {
-              matches[j].memo_key = withdrawal_account.memo_key;
-            }
-          }
-
-          sendWithdrawals(withdrawals);
-        }
-      }, function(err) {
-        logError('Error loading withdrawal accounts: ' + err);
-      });
-    } else
-      sendWithdrawals(withdrawals);
-  }
-
+				sendWithdrawals(withdrawals);
+			}
+		}, function(err) {
+			logError('Error loading withdrawal accounts: ' + err);
+		});
+	} else
+		sendWithdrawals(withdrawals);
+  
   updateDelegations();
 }
 
@@ -1189,8 +1175,11 @@ function sendWithdrawals(withdrawals) {
     // If there are more withdrawals, send the next one.
     if (withdrawals.length > 0)
       sendWithdrawals(withdrawals);
-    else
-      utils.log('========== Withdrawals Complete! ==========');
+    else {
+			earnings = {};
+			saveState();
+			utils.log('========== Withdrawals Complete! ==========');
+		}
   });
 }
 
@@ -1202,32 +1191,39 @@ function sendWithdrawal(withdrawal, retries, callback) {
     return;
   }
 
-  var formatted_amount = utils.format(withdrawal.amount, 3).replace(/,/g, '') + ' ' + withdrawal.currency;
+  var formatted_amount = withdrawal.amount.toFixed(3) + ' ' + withdrawal.currency;
   var memo = config.auto_withdrawal.memo.replace(/\{balance\}/g, formatted_amount);
 
   // Encrypt memo
   if (memo.startsWith('#') && config.memo_key && config.memo_key != '')
     memo = steem.memo.encode(config.memo_key, withdrawal.memo_key, memo);
 
-  // Send the withdrawal amount to the specified account
-  client.broadcast.transfer({ amount: formatted_amount, from: config.account, to: withdrawal.to, memo: memo }, dsteem.PrivateKey.fromString(config.active_key)).then(function(response) {
-    utils.log('$$$ Auto withdrawal: ' + formatted_amount + ' sent to @' + withdrawal.to);
+	if(['STEEM', 'SBD'].includes(withdrawal.currency)) {
+		// Send the withdrawal amount to the specified account
+		client.broadcast.transfer({ amount: formatted_amount, from: config.account, to: withdrawal.to, memo: memo }, dsteem.PrivateKey.fromString(config.active_key)).then(function(response) {
+			utils.log('$$$ Auto withdrawal: ' + formatted_amount + ' sent to @' + withdrawal.to);
 
-    if(callback)
-      callback();
-  }, function(err) {
-    logError('Error sending withdrawal transaction to: ' + withdrawal.to + ', Error: ' + err);
+			if(callback)
+				callback();
+		}, function(err) {
+			logError('Error sending withdrawal transaction to: ' + withdrawal.to + ', Error: ' + err);
 
-    // Try again once if there is an error
-    if(retries < 1)
-      setTimeout(function() { sendWithdrawal(withdrawal, retries + 1, callback); }, 3000);
-    else {
-      utils.log('============= Withdrawal failed two times to: ' + withdrawal.to + ' for: ' + formatted_amount + ' ===============');
+			// Try again once if there is an error
+			if(retries < 1)
+				setTimeout(function() { sendWithdrawal(withdrawal, retries + 1, callback); }, 3000);
+			else {
+				utils.log('============= Withdrawal failed two times to: ' + withdrawal.to + ' for: ' + formatted_amount + ' ===============');
 
-      if(callback)
-        callback();
-    }
-  });
+				if(callback)
+					callback();
+			}
+		});
+	} else {
+		steemEnginePayment(withdrawal.to, withdrawal.amount.toFixed(3), withdrawal.currency, memo, 0);
+
+		if(callback)
+			callback();
+	}
 }
 
 function loadPrices() {
