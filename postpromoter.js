@@ -8,7 +8,6 @@ const SSC = require('sscjs');
 var account = null;
 var transactions = [];
 var outstanding_bids = [];
-var delegators = [];
 var last_round = [];
 var next_round = [];
 var blacklist = [];
@@ -17,7 +16,6 @@ var config = null;
 var first_load = true;
 var isVoting = false;
 var last_withdrawal = null;
-var use_delegators = false;
 var round_end_timeout = -1;
 var steem_price = 1;  // This will get overridden with actual prices if a price_feed_url is specified in settings
 var sbd_price = 1;    // This will get overridden with actual prices if a price_feed_url is specified in settings
@@ -96,32 +94,6 @@ async function startup() {
 
     utils.log('Restored saved bot state: ' + JSON.stringify({ last_trx_id: (transactions.length > 0 ? transactions[transactions.length - 1] : ''), bids: outstanding_bids.length, last_withdrawal: last_withdrawal }));
   }
-
-  // Check whether or not auto-withdrawals are set to be paid to delegators.
-  use_delegators = config.auto_withdrawal && config.auto_withdrawal.active && config.auto_withdrawal.accounts.find(a => a.name == '$delegators');
-
-  // If so then we need to load the list of delegators to the account
-  if(use_delegators) {
-    if(fs.existsSync('delegators.json')) {
-      delegators = JSON.parse(fs.readFileSync("delegators.json"));
-
-      var vests = delegators.reduce(function (total, v) { return total + parseFloat(v.vesting_shares); }, 0);
-      utils.log('Delegators Loaded (from disk) - ' + delegators.length + ' delegators and ' + vests + ' VESTS in total!');
-    }
-    else
-    {
-      var del = require('./delegators');
-      utils.log('Started loading delegators from account history...');
-      del.loadDelegations(client, config.account, function(d) {
-        delegators = d;
-        var vests = delegators.reduce(function (total, v) { return total + parseFloat(v.vesting_shares); }, 0);
-        utils.log('Delegators Loaded (from account history) - ' + delegators.length + ' delegators and ' + vests + ' VESTS in total!');
-
-        // Save the list of delegators to disk
-        saveDelegators();
-      });
-    }
-	}
 	
 	await startProcess();
 
@@ -428,102 +400,6 @@ function resteem(bid) {
       utils.log('Resteemed Post: @' + bid.sender + '/' + bid.permlink);
   }, function(err) {
       utils.log('Error resteeming post: @' + bid.sender + '/' + bid.permlink);
-  });
-}
-
-function getTransactions(callback) {
-  var last_trx_id = null;
-  var num_trans = 50;
-
-  // If this is the first time the bot is ever being run, start with just the most recent transaction
-  if (first_load && transactions.length == 0) {
-    utils.log('First run - starting with last transaction on account.');
-  }
-
-  // If this is the first time the bot is run after a restart get a larger list of transactions to make sure none are missed
-  if (first_load && transactions.length > 0) {
-    utils.log('First run - loading all transactions since last transaction processed: ' + transactions[transactions.length - 1]);
-    last_trx_id = transactions[transactions.length - 1];
-    num_trans = 1000;
-  }
-
-  client.database.call('get_account_history', [account.name, -1, num_trans]).then(function (result) {
-    // On first load, just record the list of the past 50 transactions so we don't double-process them.
-    if (first_load && transactions.length == 0) {
-      transactions = result.map(r => r[1].trx_id).filter(t => t != '0000000000000000000000000000000000000000');
-      first_load = false;
-
-      utils.log(transactions.length + ' previous trx_ids recorded.');
-
-      if(callback)
-        callback();
-
-      return;
-    }
-
-    first_load = false;
-    var reached_starting_trx = false;
-
-    for (var i = 0; i < result.length; i++) {
-      var trans = result[i];
-      var op = trans[1].op;
-
-      // Don't need to process virtual ops
-      if(trans[1].trx_id == '0000000000000000000000000000000000000000')
-        continue;
-
-      // Check that this is a new transaction that we haven't processed already
-      if(transactions.indexOf(trans[1].trx_id) < 0) {
-
-        // If the bot was restarted after being stopped for a while, don't process transactions until we're past the last trx_id that was processed
-        if(last_trx_id && !reached_starting_trx) {
-          if(trans[1].trx_id == last_trx_id)
-            reached_starting_trx = true;
-
-          continue;
-        }
-
-        if(config.debug_logging)
-          utils.log('Processing Transaction: ' + JSON.stringify(trans));
-
-        // We only care about transfers to the bot
-        if(use_delegators && op[0] == 'delegate_vesting_shares' && op[1].delegatee == account.name) {
-          // If we are paying out to delegators, then update the list of delegators when new delegation transactions come in
-          var delegator = delegators.find(d => d.delegator == op[1].delegator);
-
-          if(delegator)
-            delegator.new_vesting_shares = op[1].vesting_shares;
-          else {
-            delegator = { delegator: op[1].delegator, vesting_shares: 0, new_vesting_shares: op[1].vesting_shares };
-            delegators.push(delegator);
-          }
-
-          // Save the updated list of delegators to disk
-          saveDelegators();
-
-          // Check if we should send a delegation message
-          if(parseFloat(delegator.new_vesting_shares) > parseFloat(delegator.vesting_shares) && config.transfer_memos['delegation'] && config.transfer_memos['delegation'] != '')
-            refund(op[1].delegator, 0.001, 'SBD', 'delegation', 0, utils.vestsToSP(parseFloat(delegator.new_vesting_shares)).toFixed());
-
-          utils.log('*** Delegation Update - ' + op[1].delegator + ' has delegated ' + op[1].vesting_shares);
-        }
-
-        // Save the ID of the last transaction that was processed.
-        transactions.push(trans[1].trx_id);
-
-        // Don't save more than the last 60 transaction IDs in the state
-        if(transactions.length > 60)
-          transactions.shift();
-      }
-    }
-
-    if (callback)
-      callback();
-  }, function(err) {
-    logError('Error loading account history: ' + err);
-
-    if (callback)
-      callback();
   });
 }
 
@@ -889,14 +765,6 @@ function updateVersion(old_version, new_version) {
   }
 }
 
-function saveDelegators() {
-    // Save the list of delegators to disk
-    fs.writeFile('delegators.json', JSON.stringify(delegators), function (err) {
-      if (err)
-        utils.log('Error saving delegators to disk: ' + err);
-    });
-}
-
 function refund(sender, amount, currency, reason, retries, data) {
   if(config.backup_mode) {
     utils.log('Backup Mode - not sending refund of ' + amount + ' ' + currency + ' to @' + sender + ' for reason: ' + reason);
@@ -1037,11 +905,28 @@ function checkAutoWithdraw() {
 
   // If it's past the withdrawal time and we haven't made a withdrawal today, then process the withdrawal
   if (new Date(new Date().toDateString()) > new Date(last_withdrawal) && new Date().getHours() >= config.auto_withdrawal.execute_time) {
-    processWithdrawals();
+
+		if(config.auto_withdrawal && config.auto_withdrawal.active && config.auto_withdrawal.accounts.find(a => a.name == '$delegators')) {
+			request.get(config.delegations_api + config.account, function (e, r, data) {
+				var delegators = [];
+
+				if(e) {
+					utils.log('************ Error loading list of delegators.' + e);
+					return;
+				}
+
+				try { 
+					delegators = JSON.parse(data); 
+					processWithdrawals(delegators);
+				} 
+				catch (err) { utils.log('************ Error loading list of delegators.' + err); }
+			});
+		} else
+    	processWithdrawals([]);
   }
 }
 
-function processWithdrawals() {
+function processWithdrawals(delegators) {
   if(config.backup_mode)
     return;
 
@@ -1152,21 +1037,6 @@ function processWithdrawals() {
 		});
 	} else
 		sendWithdrawals(withdrawals);
-  
-  updateDelegations();
-}
-
-function updateDelegations() {
-  var updates = delegators.filter(d => parseFloat(d.new_vesting_shares) >= 0);
-
-  for (var i = 0; i < updates.length; i++) {
-    var delegator = updates[i];
-
-    delegator.vesting_shares = delegator.new_vesting_shares;
-    delegator.new_vesting_shares = null;
-  }
-
-  saveDelegators();
 }
 
 function sendWithdrawals(withdrawals) {
