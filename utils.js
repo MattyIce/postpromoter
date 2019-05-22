@@ -200,6 +200,8 @@ function tryParse(json) {
 	}
 }
 
+function timeout(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
  module.exports = {
    updateSteemVariables: updateSteemVariables,
    getVotingPower: getVotingPower,
@@ -214,5 +216,6 @@ function tryParse(json) {
    toTimer: toTimer,
 	 log: log,
 	 getVPHF20: getVPHF20,
-	 tryParse: tryParse
+	 tryParse: tryParse,
+	 timeout: timeout
  }

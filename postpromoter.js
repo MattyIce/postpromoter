@@ -928,7 +928,9 @@ function checkAutoWithdraw() {
 
 function processWithdrawals(delegators) {
   if(config.backup_mode)
-    return;
+		return;
+		
+	utils.log('========== Sending Payouts ==========');
 
 	// Save the date of the last withdrawal
 	last_withdrawal = new Date().toDateString();
@@ -1048,12 +1050,12 @@ function sendWithdrawals(withdrawals) {
     else {
 			earnings = {};
 			saveState();
-			utils.log('========== Withdrawals Complete! ==========');
+			utils.log('========== Payouts Complete! ==========');
 		}
   });
 }
 
-function sendWithdrawal(withdrawal, retries, callback) {
+async function sendWithdrawal(withdrawal, retries, callback) {
   if(parseFloat(utils.format(withdrawal.amount, 3)) <= 0) {
     if(callback)
       callback();
@@ -1089,7 +1091,7 @@ function sendWithdrawal(withdrawal, retries, callback) {
 			}
 		});
 	} else {
-		steemEnginePayment(withdrawal.to, withdrawal.amount.toFixed(3), withdrawal.currency, memo, 0);
+		await steemEnginePayment(withdrawal.to, withdrawal.amount.toFixed(3), withdrawal.currency, memo, 0);
 
 		if(callback)
 			callback();
