@@ -135,7 +135,7 @@ async function processSETransaction(tx) {
 		if(!payload)
 			return;
 
-		if(payload.to != config.account)
+		if(payload.to != config.payment_account)
 			return;
 
 		var currency = payload.symbol;
@@ -775,7 +775,7 @@ function refund(sender, amount, currency, reason, retries, data) {
     retries = 0;
 
   // Make sure refunds are enabled and the sender isn't on the no-refund list (for exchanges and things like that).
-  if (reason != 'forward_payment' && (!config.refunds_enabled || sender == config.account || (config.no_refund && config.no_refund.indexOf(sender) >= 0))) {
+  if (reason != 'forward_payment' && (!config.refunds_enabled || sender == config.payment_account || (config.no_refund && config.no_refund.indexOf(sender) >= 0))) {
     utils.log("Invalid bid - " + reason + ' NO REFUND');
 
     // If this is a payment from an account on the no_refund list, forward the payment to the post_rewards_withdrawal_account
@@ -808,7 +808,7 @@ function refund(sender, amount, currency, reason, retries, data) {
 
 	if(['SBD', 'STEEM'].includes(currency)) {
 		// Issue the refund.
-		client.broadcast.transfer({ amount: utils.format(amount, 3) + ' ' + currency, from: config.account, to: sender, memo: memo }, dsteem.PrivateKey.fromString(config.active_key)).then(function(response) {
+		client.broadcast.transfer({ amount: utils.format(amount, 3) + ' ' + currency, from: config.payment_account, to: sender, memo: memo }, dsteem.PrivateKey.fromString(config.active_key)).then(function(response) {
 			utils.log('Refund of ' + amount + ' ' + currency + ' sent to @' + sender + ' for reason: ' + reason);
 		}, function(err) {
 			logError('Error sending refund to @' + sender + ' for: ' + amount + ' ' + currency + ', Error: ' + err);
@@ -835,7 +835,7 @@ async function steemEnginePayment(to, amount, currency, memo, retries) {
 		}
 	};
 
-	return await client.broadcast.json({ id: config.se_chain_id, json: JSON.stringify(transaction_data), required_auths: [config.account], required_posting_auths: [] }, dsteem.PrivateKey.fromString(config.active_key))
+	return await client.broadcast.json({ id: config.se_chain_id, json: JSON.stringify(transaction_data), required_auths: [config.payment_account], required_posting_auths: [] }, dsteem.PrivateKey.fromString(config.active_key))
 		.then(response => {
 			utils.log('Payment of ' + parseFloat(amount).toFixed(3) + ' ' + currency + ' sent to @' + to + ' for reason: ' + memo);
 			return response;
@@ -1072,7 +1072,7 @@ async function sendWithdrawal(withdrawal, retries, callback) {
 
 	if(['STEEM', 'SBD'].includes(withdrawal.currency)) {
 		// Send the withdrawal amount to the specified account
-		client.broadcast.transfer({ amount: formatted_amount, from: config.account, to: withdrawal.to, memo: memo }, dsteem.PrivateKey.fromString(config.active_key)).then(function(response) {
+		client.broadcast.transfer({ amount: formatted_amount, from: config.payment_account, to: withdrawal.to, memo: memo }, dsteem.PrivateKey.fromString(config.active_key)).then(function(response) {
 			utils.log('$$$ Auto withdrawal: ' + formatted_amount + ' sent to @' + withdrawal.to);
 
 			if(callback)

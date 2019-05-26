@@ -5,12 +5,16 @@
     "https://steemd.minnowsupportproject.org",
     "https://steemd.privex.io",
     "https://gtg.steem.house:8090"
-  ],
+	],
+	"se_rpc_url": "https://testapi.steem-engine.com/",
+	"se_chain_id": "ssc-00000000000000000002",
+	"delegations_api": "https://api.steemplus.app/delegators/",
   "backup_mode": false,
   "disabled_mode": false,
   "detailed_logging": false,
   "owner_account": "bot_owner_account_name",
-  "account": "your_bot_account_name",
+	"account": "your_bot_account_name",
+	"payment_account": "payment_account_name",
   "memo_key": "your_private_memo_key",
   "posting_key": "your_private_posting_key",
   "active_key": "your_private_active_key",
@@ -23,13 +27,18 @@
   "min_post_age": 20,
   "max_post_age": 84,
   "allow_comments": false,
-  "currencies_accepted": ["SBD", "STEEM"],
+  "currencies_accepted": ["PROMOTE"],
   "refunds_enabled": true,
   "min_refund_amount": 0.002,
   "no_refund": ["bittrex", "poloniex", "openledger", "blocktrades", "minnowbooster", "ginabot"],
   "comment_location": "comment.md",
   "max_per_author_per_round": 1,
-  "price_source": "bittrex",
+	"price_source": "bittrex",
+	
+	"tokens": [
+		{ "symbol": "PROMOTE", "usd_value": 0.001 }
+	],
+
   "blacklist_settings": {
     "flag_signal_accounts": ["spaminator", "cheetah", "steemcleaners", "mack-bot"],
     "blacklist_location": "blacklist",
