@@ -117,7 +117,8 @@ async function processSEBlock(err, block) {
 	if(!block)
 		return;
 	
-	utils.log('Processing block [' + block.blockNumber + ']...', block.blockNumber % 100 == 0 ? 1 : 4);
+	if(config.detailed_logging || block.blockNumber % 100 == 0)
+		utils.log('Processing block [' + block.blockNumber + ']...');
 
 	try {
 		for(var i = 0; i < block.transactions.length; i++)
