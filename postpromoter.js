@@ -410,8 +410,8 @@ function checkRoundFillLimit(round, amount, currency) {
 
   var vote_value = utils.getVoteValue(100, account, 10000, steem_price);
   var vote_value_usd = utils.getVoteValueUSD(vote_value, sbd_price)
-  var bid_value = round.reduce(function(t, b) { return t + b.amount * ((b.currency == 'SBD') ? sbd_price : steem_price) }, 0);
-  var new_bid_value = amount * ((currency == 'SBD') ? sbd_price : steem_price);
+  var bid_value = round.reduce(function(t, b) { return t + getUSDValue(b); }, 0);
+  var new_bid_value = getUSDValue({ amount: amount, currency: currency }); //amount * ((currency == 'SBD') ? sbd_price : steem_price);
 
   // Check if the value of the bids is over the round fill limit
   return (vote_value_usd * 0.75 * config.round_fill_limit < bid_value + new_bid_value);
