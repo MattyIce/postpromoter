@@ -821,7 +821,7 @@ function refund(sender, amount, currency, reason, retries, data) {
 				utils.log('============= Refund failed three times for: @' + sender + ' ===============');
 		});
 	} else
-		steemEnginePayment(sender, amount, currency, reason, 0);
+		steemEnginePayment(sender, amount, currency, memo, 0);
 }
 
 async function steemEnginePayment(to, amount, currency, memo, retries) {
