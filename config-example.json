@@ -36,7 +36,7 @@
 	"price_source": "bittrex",
 	
 	"tokens": [
-		{ "symbol": "PROMOTE", "usd_value": 0.001 }
+		{ "symbol": "PROMOTE", "value": 0.001, "peg": "USD" }
 	],
 
   "blacklist_settings": {

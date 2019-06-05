@@ -1165,7 +1165,16 @@ function getUsdValue(bid) {
 		var token = config.tokens.find(t => t.symbol == bid.currency);
 
 		// If no value exists just return a default 1 cent value???
-		return token ? bid.amount * token.usd_value : 0.01;	
+		if(!token)
+			return 0.01;
+
+		switch(token.peg) {
+			case "STEEM":
+				return bid.amount * steem_price * token.value;
+			default:
+				// Default is USD
+				return bid.amount * token.value;
+		}
 	}
 }
 
