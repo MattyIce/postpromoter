@@ -25,6 +25,7 @@ var rpc_node = null;
 var ssc = null;
 var last_se_block = 0;
 var earnings = {};
+var token_prices = {};
 
 startup();
 
@@ -623,7 +624,7 @@ function checkPost(memo, amount, currency, sender, retries) {
 				}
 			} else {
 				// All good - push to the array of valid bids for this round
-				utils.log('Valid Bid - Amount: ' + amount + ' ' + currency + ', Url: ' + memo);
+				utils.log('Valid Bid - Amount: ' + amount + ' ' + currency + ', USD Value: ' + (+getUsdValue({ amount: amount, currency: currency }).toFixed(5)) + ', Url: ' + memo);
 				round.push({ amount: amount, currency: currency, sender: sender, author: author, permlink: permLink, url: memo });
 
 				// Update the bot's earnings for this currency
@@ -1155,7 +1156,19 @@ function loadPrices() {
         }
       });
     });
-  }
+	}
+	
+	// Load the prices for any non-pegged SE tokens from the SE market
+	for(var i = 0; i < config.tokens.filter(t => !t.value).length; i++) {
+		var token = config.tokens[i];
+
+		ssc.findOne('market', 'metrics', { symbol: token.symbol }).then(result => {
+			if(result && result.lastPrice) {
+				token_prices[token.symbol] = parseFloat(result.lastPrice);
+				utils.log("Loaded " + token.symbol + " price: " + token_prices[token.symbol]);
+			}
+		});
+	}
 }
 
 function getUsdValue(bid) { 
@@ -1167,6 +1180,10 @@ function getUsdValue(bid) {
 		// If no value exists just return a default 1 cent value???
 		if(!token)
 			return 0.01;
+
+		// If it doesn't have a value specified in config, then use price loaded from SE market
+		if(!token.value)
+			return bid.amount * steem_price * token_prices[token.symbol];
 
 		switch(token.peg) {
 			case "STEEM":
