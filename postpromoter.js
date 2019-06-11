@@ -826,24 +826,34 @@ function refund(sender, amount, currency, reason, retries, data) {
 }
 
 async function steemEnginePayment(to, amount, currency, memo, retries) {
+	var precision = 3;
+
+	var token = config.tokens.find(t => t.symbol == currency);
+
+	if(token && !isNaN(parseInt(token.precision)))
+		precision = token.precision;
+
+	if(toPrecision(amount, precision) <= 0)
+		return;
+
 	var transaction_data = {
 		"contractName": "tokens",
 		"contractAction": "transfer",
 		"contractPayload": {
 			"symbol": currency,
 			"to": to,
-			"quantity": amount + '',
+			"quantity": toPrecision(amount, precision) + '',
 			"memo": memo
 		}
 	};
 
 	return await client.broadcast.json({ id: config.se_chain_id, json: JSON.stringify(transaction_data), required_auths: [config.payment_account], required_posting_auths: [] }, dsteem.PrivateKey.fromString(config.active_key))
 		.then(response => {
-			utils.log('Payment of ' + parseFloat(amount).toFixed(3) + ' ' + currency + ' sent to @' + to + ' for reason: ' + memo);
+			utils.log('Payment of ' + toPrecision(amount, precision) + ' ' + currency + ' sent to @' + to + ' for reason: ' + memo);
 			return response;
 		})
 		.catch(async err => {
-			utils.log('***** Error sending payment of ' + parseFloat(amount).toFixed(3) + ' ' + currency + ' sent to @' + to + ' for reason: ' + memo + ', Error: ' + JSON.stringify(err));
+			utils.log('***** Error sending payment of ' + toPrecision(amount, precision) + ' ' + currency + ' sent to @' + to + ' for reason: ' + memo + ', Error: ' + JSON.stringify(err));
 
 			// Try again one time on error
 			if (retries < 2)
@@ -851,7 +861,7 @@ async function steemEnginePayment(to, amount, currency, memo, retries) {
 			else {
 				utils.log('');
 				utils.log('============= Payment transaction failed three times! ===============');
-				utils.log('Failed payment of ' + parseFloat(amount).toFixed(3) + ' ' + currency + ' sent to @' + to + ' for reason: ' + memo);
+				utils.log('Failed payment of ' + toPrecision(amount, precision) + ' ' + currency + ' sent to @' + to + ' for reason: ' + memo);
 				utils.log('=====================================================================');
 				utils.log('');
 				

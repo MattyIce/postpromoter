@@ -202,6 +202,8 @@ function tryParse(json) {
 
 function timeout(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
+function toPrecision(value, precision) { return Math.floor(parseFloat(value) * Math.pow(10, precision)) / Math.pow(10, precision); }
+
  module.exports = {
    updateSteemVariables: updateSteemVariables,
    getVotingPower: getVotingPower,
@@ -217,5 +219,6 @@ function timeout(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 	 log: log,
 	 getVPHF20: getVPHF20,
 	 tryParse: tryParse,
-	 timeout: timeout
+	 timeout: timeout,
+	 toPrecision: toPrecision
  }
