@@ -833,7 +833,7 @@ async function steemEnginePayment(to, amount, currency, memo, retries) {
 	if(token && !isNaN(parseInt(token.precision)))
 		precision = token.precision;
 
-	if(toPrecision(amount, precision) <= 0)
+	if(utils.toPrecision(amount, precision) <= 0)
 		return;
 
 	var transaction_data = {
@@ -842,18 +842,18 @@ async function steemEnginePayment(to, amount, currency, memo, retries) {
 		"contractPayload": {
 			"symbol": currency,
 			"to": to,
-			"quantity": toPrecision(amount, precision) + '',
+			"quantity": utils.toPrecision(amount, precision) + '',
 			"memo": memo
 		}
 	};
 
 	return await client.broadcast.json({ id: config.se_chain_id, json: JSON.stringify(transaction_data), required_auths: [config.payment_account], required_posting_auths: [] }, dsteem.PrivateKey.fromString(config.active_key))
 		.then(response => {
-			utils.log('Payment of ' + toPrecision(amount, precision) + ' ' + currency + ' sent to @' + to + ' for reason: ' + memo);
+			utils.log('Payment of ' + utils.toPrecision(amount, precision) + ' ' + currency + ' sent to @' + to + ' for reason: ' + memo);
 			return response;
 		})
 		.catch(async err => {
-			utils.log('***** Error sending payment of ' + toPrecision(amount, precision) + ' ' + currency + ' sent to @' + to + ' for reason: ' + memo + ', Error: ' + JSON.stringify(err));
+			utils.log('***** Error sending payment of ' + utils.toPrecision(amount, precision) + ' ' + currency + ' sent to @' + to + ' for reason: ' + memo + ', Error: ' + JSON.stringify(err));
 
 			// Try again one time on error
 			if (retries < 2)
@@ -861,7 +861,7 @@ async function steemEnginePayment(to, amount, currency, memo, retries) {
 			else {
 				utils.log('');
 				utils.log('============= Payment transaction failed three times! ===============');
-				utils.log('Failed payment of ' + toPrecision(amount, precision) + ' ' + currency + ' sent to @' + to + ' for reason: ' + memo);
+				utils.log('Failed payment of ' + utils.toPrecision(amount, precision) + ' ' + currency + ' sent to @' + to + ' for reason: ' + memo);
 				utils.log('=====================================================================');
 				utils.log('');
 				
