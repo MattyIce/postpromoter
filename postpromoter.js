@@ -853,7 +853,8 @@ async function steemEnginePayment(to, amount, currency, memo, retries) {
 			return response;
 		})
 		.catch(async err => {
-			utils.log('***** Error sending payment of ' + utils.toPrecision(amount, precision) + ' ' + currency + ' sent to @' + to + ' for reason: ' + memo + ', Error: ' + JSON.stringify(err));
+			let error_msg = err && err.jse_shortmsg ? err.jse_shortmsg : JSON.stringify(err);
+			utils.log('***** Error sending payment of ' + utils.toPrecision(amount, precision) + ' ' + currency + ' sent to @' + to + ' for reason: ' + memo + ', Error: ' + error_msg);
 
 			// Try again one time on error
 			if (retries < 2)
