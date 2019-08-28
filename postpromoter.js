@@ -27,6 +27,8 @@ var last_se_block = 0;
 var earnings = {};
 var token_prices = {};
 
+const AUTHOR_PCT = 0.5;
+
 startup();
 
 async function startup() {
@@ -273,7 +275,7 @@ function startVoting(bids) {
     var vote_value_usd = utils.getVoteValueUSD(vote_value, sbd_price)
     //min_total_bids_value_usd: calculates the minimum value in USD that the total bids must have to represent a maximum ROI defined in config.json
     //'max_roi' in config.json = 10 represents a maximum ROI of 10%
-    var min_total_bids_value_usd = vote_value_usd * 0.75 * ((100 - config.max_roi) / 100 );
+    var min_total_bids_value_usd = vote_value_usd * AUTHOR_PCT * ((100 - config.max_roi) / 100 );
     // calculates the value of the weight of the vote needed to give the maximum ROI defined
     adjusted_weight = (total < min_total_bids_value_usd) ? (total / min_total_bids_value_usd) : 1;
     utils.log('Total vote weight: ' + (config.batch_vote_weight * adjusted_weight));
@@ -415,7 +417,7 @@ function checkRoundFillLimit(round, amount, currency) {
   var new_bid_value = getUsdValue({ amount: amount, currency: currency }); //amount * ((currency == 'SBD') ? sbd_price : steem_price);
 
   // Check if the value of the bids is over the round fill limit
-  return (vote_value_usd * 0.75 * config.round_fill_limit < bid_value + new_bid_value);
+  return (vote_value_usd * AUTHOR_PCT * config.round_fill_limit < bid_value + new_bid_value);
 }
 
 function validatePost(author, permlink, isVoting, callback, retries) {
